@@ -1,0 +1,151 @@
+{
+  "id": "4f5ce3e4-2dbe-4b51-a6f5-8de83a1900af",
+  "collectedAt": "2026-08-26T02:43:05.221Z",
+  "city": "Rio de Janeiro",
+  "neighborhood": "Botafogo",
+  "query": "imóveis para alugar Botafogo Rio de Janeiro",
+  "results": [
+    {
+      "title": "Imóveis para alugar em Botafogo, Rio de Janeiro",
+      "link": "https://www.vivareal.com.br/aluguel/rj/rio-de-janeiro/zona-sul/botafogo/",
+      "snippet": "Mais de 897 imóveis para alugar em Botafogo, Rio de Janeiro ・ 85m2 no Botafogo, Rio de Janeiro ・ entre R$ 728 e R$ 63.665 por mês,",
+      "position": 1
+    },
+    {
+      "title": "Imóveis para alugar - Botafogo, Zona Sul - RJ",
+      "link": "https://www.olx.com.br/imoveis/aluguel/estado-rj/rio-de-janeiro-e-regiao/zona-sul/botafogo",
+      "snippet": "Os imóveis para alugar em Botafogo, RJ que são a sua cara estão na OLX. Descubra milhares de ofertas com preços imperdíveis. Confira já!",
+      "position": 2
+    },
+    {
+      "title": "Imóveis para alugar em Botafogo, Rio de Janeiro, RJ",
+      "link": "https://www.quintoandar.com.br/alugar/imovel/botafogo-rio-de-janeiro-rj-brasil",
+      "snippet": "No QuintoAndar você possui mais de 348 opções em imóveis para alugar em Botafogo, Rio de Janeiro de forma online, SEM fiador e SEM caução!",
+      "position": 3
+    },
+    {
+      "title": "Imóveis para alugar - Botafogo, Rio de Janeiro - RJ",
+      "link": "https://www.zapimoveis.com.br/aluguel/imoveis/rj+rio-de-janeiro+zona-sul+botafogo/",
+      "snippet": "900 anúncios de Imóveis para alugar em Botafogo, Rio de Janeiro - RJ. Descubra milhares de ofertas com preços imperdíveis. Confira já!",
+      "position": 4
+    },
+    {
+      "title": "190 Apartamentos para alugar em Botafogo, Rio de Janeiro",
+      "link": "https://www.imovelweb.com.br/apartamentos-aluguel-botafogo-rio-de-janeiro.html",
+      "snippet": "190 Apartamentos para alugar em Botafogo, Rio de Janeiro · R$ 8.000 · R$ 1.300 Condominio · Apartamento Exclusivo em Botafogo Conforto, Sofisticação e Localização ...",
+      "position": 5
+    },
+    {
+      "title": "Imóveis para alugar em Botafogo, RJ | vários portais",
+      "link": "https://buske.ai/imoveis/rj/rio-de-janeiro/botafogo/alugar/",
+      "snippet": "Compare imóveis para alugar em Botafogo, Rio de Janeiro (RJ) em vários portais. 547 imóveis encontrados ・ atual entre R$ 2.800 a R$ 6.900 ・ 70 m2 · 2 quartos ...",
+      "position": 6
+    },
+    {
+      "title": "207 Imóveis para alugar em Botafogo no Rio de Janeiro",
+      "link": "https://www.chavesnamao.com.br/imoveis-para-alugar/rj-rio-de-janeiro/botafogo/",
+      "snippet": "207 Imóveis para alugar em Botafogo no Rio de Janeiro · Prédio Comercial para Locação em Rio de Janeiro, Botafogo, 5 vagas · Casa com 2 quartos para alugar na ...",
+      "position": 7
+    },
+    {
+      "title": "Apartamentos para Alugar Botafogo, Rio de Janeiro - RJ",
+      "link": "https://www.diluanenegociosimobiliarios.com/imoveis/aluguel/apartamento/rj/rio-de-janeiro/botafogo",
+      "snippet": "Diluane Negócios Imobiliários tem excelentes opções de Apartamentos para Alugar em Botafogo, Rio de Janeiro - RJ. Acesse as melhores ofertas de Aluguel de ...",
+      "position": 8
+    },
+    {
+      "title": "Imóveis para Alugar em Botafogo, Rio de Janeiro",
+      "link": "https://www.lopes.com.br/busca/aluguel/br/rj/rio-de-janeiro/botafogo",
+      "snippet": "Mais de 48 imóveis para alugar em Botafogo, Rio de Janeiro. Descubra as melhores opções com a Lopes.",
+      "position": 9
+    },
+    {
+      "title": "30 imóveis rj para alugar em Botafogo, Bebedouro",
+      "link": "https://imoveis.trovit.com.br/aluguel-botafogo-rj",
+      "snippet": "Encontre imóveis rj para alugar em Botafogo, Bebedouro pelo melhor preço. Temos 30 imóveis rj para alugar em Botafogo, Bebedouro a partir de R$ 2.500 / mês.",
+      "position": 10
+    }
+  ],
+  "rawResponse": {
+    "searchParameters": {
+      "q": "imóveis para alugar Botafogo Rio de Janeiro",
+      "type": "search",
+      "num": 100,
+      "engine": "google"
+    },
+    "organic": [
+      {
+        "title": "Imóveis para alugar em Botafogo, Rio de Janeiro",
+        "link": "https://www.vivareal.com.br/aluguel/rj/rio-de-janeiro/zona-sul/botafogo/",
+        "snippet": "Mais de 897 imóveis para alugar em Botafogo, Rio de Janeiro ・ 85m2 no Botafogo, Rio de Janeiro ・ entre R$ 728 e R$ 63.665 por mês,",
+        "position": 1
+      },
+      {
+        "title": "Imóveis para alugar - Botafogo, Zona Sul - RJ",
+        "link": "https://www.olx.com.br/imoveis/aluguel/estado-rj/rio-de-janeiro-e-regiao/zona-sul/botafogo",
+        "snippet": "Os imóveis para alugar em Botafogo, RJ que são a sua cara estão na OLX. Descubra milhares de ofertas com preços imperdíveis. Confira já!",
+        "position": 2
+      },
+      {
+        "title": "Imóveis para alugar em Botafogo, Rio de Janeiro, RJ",
+        "link": "https://www.quintoandar.com.br/alugar/imovel/botafogo-rio-de-janeiro-rj-brasil",
+        "snippet": "No QuintoAndar você possui mais de 348 opções em imóveis para alugar em Botafogo, Rio de Janeiro de forma online, SEM fiador e SEM caução!",
+        "position": 3
+      },
+      {
+        "title": "Imóveis para alugar - Botafogo, Rio de Janeiro - RJ",
+        "link": "https://www.zapimoveis.com.br/aluguel/imoveis/rj+rio-de-janeiro+zona-sul+botafogo/",
+        "snippet": "900 anúncios de Imóveis para alugar em Botafogo, Rio de Janeiro - RJ. Descubra milhares de ofertas com preços imperdíveis. Confira já!",
+        "position": 4
+      },
+      {
+        "title": "190 Apartamentos para alugar em Botafogo, Rio de Janeiro",
+        "link": "https://www.imovelweb.com.br/apartamentos-aluguel-botafogo-rio-de-janeiro.html",
+        "snippet": "190 Apartamentos para alugar em Botafogo, Rio de Janeiro · R$ 8.000 · R$ 1.300 Condominio · Apartamento Exclusivo em Botafogo Conforto, Sofisticação e Localização ...",
+        "position": 5
+      },
+      {
+        "title": "Imóveis para alugar em Botafogo, RJ | vários portais",
+        "link": "https://buske.ai/imoveis/rj/rio-de-janeiro/botafogo/alugar/",
+        "snippet": "Compare imóveis para alugar em Botafogo, Rio de Janeiro (RJ) em vários portais. 547 imóveis encontrados ・ atual entre R$ 2.800 a R$ 6.900 ・ 70 m2 · 2 quartos ...",
+        "position": 6
+      },
+      {
+        "title": "207 Imóveis para alugar em Botafogo no Rio de Janeiro",
+        "link": "https://www.chavesnamao.com.br/imoveis-para-alugar/rj-rio-de-janeiro/botafogo/",
+        "snippet": "207 Imóveis para alugar em Botafogo no Rio de Janeiro · Prédio Comercial para Locação em Rio de Janeiro, Botafogo, 5 vagas · Casa com 2 quartos para alugar na ...",
+        "position": 7
+      },
+      {
+        "title": "Apartamentos para Alugar Botafogo, Rio de Janeiro - RJ",
+        "link": "https://www.diluanenegociosimobiliarios.com/imoveis/aluguel/apartamento/rj/rio-de-janeiro/botafogo",
+        "snippet": "Diluane Negócios Imobiliários tem excelentes opções de Apartamentos para Alugar em Botafogo, Rio de Janeiro - RJ. Acesse as melhores ofertas de Aluguel de ...",
+        "position": 8
+      },
+      {
+        "title": "Imóveis para Alugar em Botafogo, Rio de Janeiro",
+        "link": "https://www.lopes.com.br/busca/aluguel/br/rj/rio-de-janeiro/botafogo",
+        "snippet": "Mais de 48 imóveis para alugar em Botafogo, Rio de Janeiro. Descubra as melhores opções com a Lopes.",
+        "position": 9
+      },
+      {
+        "title": "30 imóveis rj para alugar em Botafogo, Bebedouro",
+        "link": "https://imoveis.trovit.com.br/aluguel-botafogo-rj",
+        "snippet": "Encontre imóveis rj para alugar em Botafogo, Bebedouro pelo melhor preço. Temos 30 imóveis rj para alugar em Botafogo, Bebedouro a partir de R$ 2.500 / mês.",
+        "position": 10
+      }
+    ],
+    "relatedSearches": [
+      {
+        "query": "3 aptos para alugar botafogo"
+      },
+      {
+        "query": "Apartamento alugar - Botafogo RJ"
+      },
+      {
+        "query": "Aluguel Flamengo RJ"
+      }
+    ],
+    "credits": 1
+  }
+}
