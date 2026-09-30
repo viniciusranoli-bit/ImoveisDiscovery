@@ -1,15 +1,20 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SearchRun, SerperCollection } from "./listings";
+import type { MultiPortalRun, SearchRun, SerperCollection } from "./listings";
+import {
+  persistMultiPortalRun,
+  readDiscovery,
+  readLatestPortalRun,
+  saveDiscovery,
+} from "./db/repository";
 
 const root = process.cwd();
 const memoryPath = path.join(root, "MEMORY.md");
 const searchesDir = path.join(root, "json", "searches");
-const serperDir = path.join(root, "json", "serper");
 
 export async function readAgentContext() {
   const [agent, memory] = await Promise.all([
-    readFile(path.join(root, "AGENTES.md"), "utf8"),
+    readFile(path.join(root, "AGENTS.md"), "utf8"),
     readFile(memoryPath, "utf8"),
   ]);
   return { agent, memory };
@@ -51,12 +56,19 @@ export async function saveSearch(run: SearchRun) {
 }
 
 export async function saveSerperCollection(collection: SerperCollection) {
-  await mkdir(serperDir, { recursive: true });
-  await writeFile(path.join(serperDir, `${collection.id}.json`), JSON.stringify(collection, null, 2), "utf8");
+  await saveDiscovery(collection);
 }
 
 export async function readSerperCollection(id: string) {
-  return JSON.parse(await readFile(path.join(serperDir, `${id}.json`), "utf8")) as SerperCollection;
+  return readDiscovery(id);
+}
+
+export async function saveMultiPortalRun(run: MultiPortalRun) {
+  return persistMultiPortalRun(run);
+}
+
+export async function readLatestMultiPortalRun() {
+  return readLatestPortalRun();
 }
 
 const cell = (value: string) => value.replaceAll("|", "\\|").replaceAll("\n", " ").trim();

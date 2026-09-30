@@ -55,6 +55,19 @@ Ordem de preferência:
 
 Os conectores devem aplicar timeout, retry com backoff e jitter, limitação de taxa e isolamento de falhas por fonte. Bloqueios de acesso não devem ser contornados.
 
+#### Registro de conectores
+
+A implementação atual usa um registro por hostname:
+
+- conectores específicos para Viva Real, ZAP Imóveis, OLX, QuintoAndar e Imovelweb;
+- extrator genérico para os demais domínios retornados pela Serper;
+- extração preferencial de JSON-LD e, em seguida, cartões e links visíveis;
+- resultado obrigatório por fonte: `ok`, `blocked`, `empty` ou `error`.
+
+A Serper descobre páginas de busca, mas não é considerada fonte dos dados do imóvel. Os filtros de finalidade, preço, quartos, vagas e tipo são incluídos na consulta de descoberta, traduzidos para a URL do portal quando há regra conhecida e reaplicados sobre o modelo normalizado.
+
+O modo visível é o padrão local porque o Viva Real retornou `403` no teste headless e `200` com Chrome visível. Esse comportamento não garante acesso futuro. CAPTCHA, Cloudflare e autenticação são reportados sem tentativa de contorno.
+
 ### 2. Armazenamento bruto
 
 Salvar uma captura imutável do dado recebido antes de normalizá-lo. A captura permite auditoria, reprocessamento e comparação entre versões.
@@ -86,6 +99,8 @@ A IA não pode:
 - calcular valores que dependam de componentes ausentes.
 
 Usar um modelo econômico com saída estruturada na extração comum e reservar um modelo mais capaz para ambiguidades. O modelo e a versão usados devem ser registrados em cada processamento.
+
+Apartamentos exibem uma análise opcional sob demanda. O servidor valida o identificador contra a última coleta, abre a página de detalhes com Playwright e envia somente seu conteúdo textual para a IA. O retorno estruturado distingue direito à laje alegado documentalmente, menção não verificada, ausência e ambiguidade; churrasqueira só é marcada quando vinculada explicitamente à varanda. O conteúdo da página é tratado como entrada não confiável para reduzir risco de prompt injection. O resultado é armazenado localmente para evitar custo duplicado.
 
 ### 4. Modelo normalizado
 
@@ -157,9 +172,39 @@ Gerar evento somente para:
 
 Usar uma chave idempotente por imóvel, tipo de evento e versão para impedir alertas repetidos. O alerta deve separar aluguel e compra e apontar dados pendentes.
 
-## Componentes sugeridos
+### 9. Persistência PostgreSQL e janela semestral
 
-- **Python** para conectores, regras, processamento e tarefas agendadas.
+O PostgreSQL é a fonte de verdade para descobertas, coletas, imóveis e análises. A estrutura relacional contém:
+
+- `search_runs`: consulta, filtros, resposta da descoberta, datas e totais;
+- `source_collections`: resultado técnico de cada portal;
+- `properties`: identidade estável e datas de primeira, última e última pesquisa elegível;
+- `property_listings`: aliases e URLs por fonte;
+- `search_results`: snapshot de cada aparição e decisão de elegibilidade;
+- `property_analyses`: análise estruturada da IA e validade.
+- `property_analysis_reviews`: respostas humanas para campos que a IA classificou como ambíguos.
+
+A identidade não inclui preço, permitindo reconhecer o mesmo imóvel após uma alteração de valor. Identificadores externos confiáveis têm prioridade; URLs canônicas são o fallback conservador.
+
+Durante a persistência, cada imóvel é bloqueado dentro de uma transação. Se `last_researched_at` estiver ausente ou tiver pelo menos seis meses, o imóvel é liberado. A coleta não altera essa data: somente a conclusão da análise por IA inicia uma nova janela. Caso contrário, a aparição é registrada com `suppressed_until`, mas não é devolvida como resultado novo. Reaparições suprimidas não estendem o prazo.
+
+Análises da IA válidas também são reutilizadas por seis meses. A aplicação opera em modo fail-closed: sem banco disponível, a pesquisa falha em vez de ignorar a proteção contra repetição.
+
+O histórico usa uma linha por imóvel, correspondente à reaparição mais recente, e agrupa os itens em: laje, churrasqueira na varanda, ambos, nenhum ou ambíguo. Uma resposta humana pode resolver apenas campos originalmente ambíguos; ela fica separada do resultado imutável da IA e passa a determinar o grupo exibido.
+
+Operação local:
+
+```text
+npm run db:migrate
+npm run db:check
+npm run db:import-json
+```
+
+As migrações são versionadas em `db/migrations`. O importador transfere o histórico JSON existente, que deixa de ser a fonte de verdade após a migração.
+
+## Componentes implementados e sugeridos
+
+- **TypeScript e Next.js** para interface, APIs, regras e conectores atuais.
 - **PostgreSQL** em produção; SQLite pode ser usado no protótipo local.
 - **Fila de tarefas** somente quando volume ou confiabilidade exigirem processamento assíncrono.
 - **Playwright** para fontes sem integração estruturada, quando autorizado.
@@ -180,6 +225,10 @@ DATABASE_URL
 LLM_API_KEY
 MAPS_API_KEY
 ALERT_CHANNEL_TOKEN
+PLAYWRIGHT_HEADLESS
+PLAYWRIGHT_CHANNEL
+PLAYWRIGHT_CONCURRENCY
+PLAYWRIGHT_SETTLE_MS
 ```
 
 Manter apenas placeholders em exemplos e incluir `.env` no `.gitignore`.

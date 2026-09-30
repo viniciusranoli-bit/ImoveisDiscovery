@@ -1,14 +1,19 @@
 {
   "name": "alugueldiscovery",
   "version": "1.0.0",
-  "description": "Painel de monitoramento de apartamentos para aluguel",
+  "description": "Painel multiportal de monitoramento de imóveis para aluguel e compra",
   "private": true,
   "scripts": {
     "dev": "set NODE_USE_SYSTEM_CA=1&& next dev",
     "build": "set NODE_USE_SYSTEM_CA=1&& next build",
     "start": "set NODE_USE_SYSTEM_CA=1&& next start",
     "lint": "eslint .",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:vivareal": "tsx scripts/test-vivareal-playwright.ts",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:check": "tsx scripts/db-check.ts",
+    "db:import-json": "tsx scripts/db-import-json.ts",
+    "db:verify-cooldown": "tsx scripts/db-verify-cooldown.ts"
   },
   "keywords": [],
   "author": "",
@@ -17,16 +22,19 @@
     "dotenv": "^17.4.2",
     "next": "^16.3.2",
     "openai": "^7.5.0",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.2",
+    "playwright": "^1.63.0",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3"
   }

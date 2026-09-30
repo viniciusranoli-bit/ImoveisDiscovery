@@ -3,7 +3,13 @@ node_modules/
 out/
 .env
 .env.*
+backend/.env
 !.env.example
+!backend/.env.example
 json/searches/
+json/serper/
+json/portal-runs/
+json/property-analyses/
 coverage/
+artifacts/
 *.tsbuildinfo

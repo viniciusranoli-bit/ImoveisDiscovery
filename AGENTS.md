@@ -83,6 +83,7 @@ Preferir APIs oficiais, feeds e integrações autorizadas. Usar automação de n
 7. Dar peso alto a cobertura e direito à laje; dar peso baixo ao tipo da vaga.
 8. Comparar com o histórico e alertar somente anúncios novos ou mudanças relevantes, como queda de preço, disponibilidade ou correção de dados.
 9. Manter histórico de versões e alertas para evitar repetição.
+10. Após a conclusão de uma análise por IA, não tratar o mesmo imóvel como novo nem repetir a análise por seis meses. Pesquisas sem análise de IA não iniciam o prazo. Registrar reaparições posteriores à análise no histórico sem estender a janela.
 
 ## Formato do alerta
 

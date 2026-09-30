@@ -1,4 +1,55 @@
 export type Priority = "Alta" | "Média" | "Baixa";
+export type ListingPurpose = "rent" | "sale";
+export type PropertyType = "apartment" | "penthouse";
+
+export type SearchFilters = {
+  purpose: ListingPurpose;
+  priceMin?: number;
+  priceMax?: number;
+  bedroomsMin: number;
+  parkingMin: number;
+  propertyTypes: PropertyType[];
+};
+
+export type CollectedListing = {
+  id: string;
+  title: string;
+  purpose: ListingPurpose;
+  propertyType: PropertyType | "unknown";
+  price?: number;
+  bedrooms?: number;
+  parkingSpaces?: number;
+  areaM2?: number;
+  location?: string;
+  neighborhood: string;
+  link: string;
+  source: string;
+  sources: string[];
+  sourceSearchUrl: string;
+  collectedAt: string;
+  evidence: string[];
+};
+
+export type SourceCollectionStatus = {
+  source: string;
+  searchUrl: string;
+  status: "ok" | "blocked" | "empty" | "error";
+  httpStatus?: number;
+  found: number;
+  message?: string;
+  durationMs: number;
+};
+
+export type MultiPortalRun = {
+  id: string;
+  collectionId: string;
+  collectedAt: string;
+  filters: SearchFilters;
+  listings: CollectedListing[];
+  sources: SourceCollectionStatus[];
+  totalCollected?: number;
+  suppressedCount?: number;
+};
 
 export type Listing = {
   id: string;
@@ -54,6 +105,7 @@ export type SerperCollection = {
   city: "Rio de Janeiro";
   neighborhood: string;
   query: string;
+  filters?: SearchFilters;
   results: SerperResult[];
   rawResponse: unknown;
 };
@@ -74,6 +126,27 @@ const normalizeUrl = (url: string) => {
     return url.trim();
   }
 };
+
+export function propertyIdentityKey(listing: CollectedListing) {
+  const externalId = listing.id.split(":").slice(1).join(":");
+  if (/^\d{6,}$/.test(externalId)) {
+    return [
+      "external",
+      externalId,
+      listing.neighborhood.toLocaleLowerCase("pt-BR"),
+      listing.propertyType,
+      listing.areaM2 ?? "",
+      listing.bedrooms ?? "",
+      listing.parkingSpaces ?? "",
+    ].join("|");
+  }
+  try {
+    const url = new URL(listing.link);
+    return `url|${url.hostname.replace(/^www\./, "").toLowerCase()}${url.pathname.replace(/\/$/, "")}`;
+  } catch {
+    return `listing|${listing.id}`;
+  }
+}
 
 export function isEligible(listing: Pick<Listing, "bedrooms" | "parkingSpaces" | "link" | "available">) {
   return Boolean(
@@ -160,4 +233,72 @@ export function deduplicate(listings: Listing[]) {
     seen.add(key);
     return true;
   });
+}
+
+export const defaultSearchFilters: SearchFilters = {
+  purpose: "rent",
+  bedroomsMin: 2,
+  parkingMin: 1,
+  propertyTypes: ["apartment", "penthouse"],
+};
+
+export function normalizeSearchFilters(input: Partial<SearchFilters>): SearchFilters {
+  const finiteNonNegative = (value: unknown) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : undefined;
+  };
+  const purpose = input.purpose === "sale" ? "sale" : "rent";
+  const requestedTypes = Array.isArray(input.propertyTypes)
+    ? input.propertyTypes.filter(
+        (item): item is PropertyType => item === "apartment" || item === "penthouse",
+      )
+    : [];
+  const priceMin = finiteNonNegative(input.priceMin);
+  const priceMax = finiteNonNegative(input.priceMax);
+
+  return {
+    purpose,
+    ...(priceMin !== undefined ? { priceMin } : {}),
+    ...(priceMax !== undefined ? { priceMax } : {}),
+    bedroomsMin: Math.max(0, Math.floor(finiteNonNegative(input.bedroomsMin) ?? 2)),
+    parkingMin: Math.max(0, Math.floor(finiteNonNegative(input.parkingMin) ?? 1)),
+    propertyTypes: requestedTypes.length ? [...new Set(requestedTypes)] : ["apartment", "penthouse"],
+  };
+}
+
+export function matchesSearchFilters(listing: CollectedListing, filters: SearchFilters) {
+  if (listing.purpose !== filters.purpose) return false;
+  if (listing.price === undefined) return false;
+  if (filters.priceMin !== undefined && listing.price < filters.priceMin) return false;
+  if (filters.priceMax !== undefined && listing.price > filters.priceMax) return false;
+  if ((listing.bedrooms ?? -1) < filters.bedroomsMin) return false;
+  if ((listing.parkingSpaces ?? -1) < filters.parkingMin) return false;
+  return listing.propertyType !== "unknown" && filters.propertyTypes.includes(listing.propertyType);
+}
+
+export function deduplicateCollectedListings(listings: CollectedListing[]) {
+  const unique = new Map<string, CollectedListing>();
+  for (const listing of listings) {
+    const externalId = listing.id.split(":").slice(1).join(":");
+    const key = /^\d{6,}$/.test(externalId)
+      ? [
+          "external",
+          externalId,
+          listing.propertyType,
+          listing.price ?? "",
+          listing.areaM2 ?? "",
+        ].join("|")
+      : normalizeUrl(listing.link);
+    const current = unique.get(key);
+    if (!current) {
+      unique.set(key, listing);
+      continue;
+    }
+    unique.set(key, {
+      ...current,
+      sources: [...new Set([...current.sources, ...listing.sources])],
+      evidence: [...new Set([...current.evidence, ...listing.evidence])],
+    });
+  }
+  return [...unique.values()];
 }

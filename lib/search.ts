@@ -3,6 +3,7 @@ import {
   isEligible,
   scoreListing,
   type RawListing,
+  type SearchFilters,
   type SearchRun,
   type SerperCollection,
   type SerperResult,
@@ -48,8 +49,22 @@ async function searchWeb(query: string) {
   return { results: payload.results ?? payload.organic ?? [], rawResponse: payload };
 }
 
-export async function collectSerperResults(city: "Rio de Janeiro", neighborhood: string) {
-  const query = `imóveis para alugar ${neighborhood} ${city}`;
+export async function collectSerperResults(
+  city: "Rio de Janeiro",
+  neighborhood: string,
+  filters: SearchFilters,
+) {
+  const purpose = filters.purpose === "sale" ? "comprar" : "alugar";
+  const types = filters.propertyTypes
+    .map((type) => (type === "penthouse" ? "cobertura" : "apartamento"))
+    .join(" ou ");
+  const price = [
+    filters.priceMin !== undefined ? `a partir de R$ ${filters.priceMin}` : "",
+    filters.priceMax !== undefined ? `até R$ ${filters.priceMax}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const query = `${types} para ${purpose} ${neighborhood} ${city} ${filters.bedroomsMin}+ quartos ${filters.parkingMin}+ vagas ${price}`.trim();
   const { results, rawResponse } = await searchWeb(query);
   return { query, results, rawResponse };
 }
