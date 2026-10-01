@@ -13,7 +13,9 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:import-json": "tsx scripts/db-import-json.ts",
-    "db:verify-cooldown": "tsx scripts/db-verify-cooldown.ts"
+    "db:verify-cooldown": "tsx scripts/db-verify-cooldown.ts",
+    "docker:up": "docker compose --env-file backend/.env up --build -d",
+    "docker:down": "docker compose --env-file backend/.env down"
   },
   "keywords": [],
   "author": "",

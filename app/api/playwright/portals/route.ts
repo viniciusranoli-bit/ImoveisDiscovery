@@ -6,6 +6,7 @@ import {
   type MultiPortalRun,
   type SearchFilters,
 } from "@/lib/listings";
+import { normalizeNeighborhoods } from "@/lib/neighborhoods";
 import {
   readLatestMultiPortalRun,
   readSerperCollection,
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       filters?: Partial<SearchFilters>;
     };
     if (!body.collectionId) {
-      return NextResponse.json({ error: "Informe a coleta da Serper." }, { status: 400 });
+      return NextResponse.json({ error: "Informe a coleta." }, { status: 400 });
     }
     const collection = await readSerperCollection(body.collectionId);
     const filters = normalizeSearchFilters(
@@ -54,14 +55,14 @@ export async function POST(request: Request) {
       .filter((url): url is string => Boolean(url));
     if (!urls.length) {
       return NextResponse.json(
-        { error: "A coleta da Serper não possui URLs válidas." },
+        { error: "A coleta não possui URLs válidas." },
         { status: 400 },
       );
     }
 
     const result = await collectPortals({
       urls,
-      neighborhood: collection.neighborhood,
+      neighborhoods: normalizeNeighborhoods(collection.neighborhood),
       filters,
     });
     const run: MultiPortalRun = {

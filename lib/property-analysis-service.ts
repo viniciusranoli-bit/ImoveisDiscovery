@@ -18,8 +18,11 @@ export async function analyzePropertyFromRun(
 ): Promise<PropertyAnalysisResponse> {
   const context = await getPropertyAnalysisContext(runId, listingId);
   if (!context) throw new Error("Imóvel não encontrado na coleta.");
+  if (context.listing_snapshot.purpose === "rent") {
+    throw new Error("A análise de laje e churrasqueira não se aplica a imóveis de aluguel.");
+  }
 
-  const cached = await readValidPropertyAnalysis(context.property_id);
+  const cached = await readValidPropertyAnalysis(context.property_id, "sale");
   if (cached) {
     return {
       ...cached.result,
@@ -100,7 +103,7 @@ ${page.description.slice(0, 20_000)}`;
     model,
     descriptionSource: listing.link,
   };
-  await saveDbPropertyAnalysis(context.property_id, analysis);
+  await saveDbPropertyAnalysis(context.property_id, analysis, "sale");
   return { ...analysis, cached: false };
 }
 

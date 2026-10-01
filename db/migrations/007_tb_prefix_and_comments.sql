@@ -1,0 +1,272 @@
+ALTER TABLE property_analysis_reviews RENAME TO tb_property_analysis_reviews;
+ALTER TABLE property_purpose_research RENAME TO tb_property_purpose_research;
+ALTER TABLE property_analyses RENAME TO tb_property_analyses;
+ALTER TABLE property_listings RENAME TO tb_property_listings;
+ALTER TABLE source_collections RENAME TO tb_source_collections;
+ALTER TABLE search_results RENAME TO tb_search_results;
+ALTER TABLE search_runs RENAME TO tb_search_runs;
+ALTER TABLE saved_searches RENAME TO tb_saved_searches;
+ALTER TABLE scheduler_runs RENAME TO tb_scheduler_runs;
+ALTER TABLE properties RENAME TO tb_properties;
+ALTER TABLE schema_migrations RENAME TO tb_schema_migrations;
+
+ALTER INDEX idx_properties_last_researched_at RENAME TO ix_tb_properties_last_researched_at;
+ALTER INDEX idx_properties_last_seen_at RENAME TO ix_tb_properties_last_seen_at;
+ALTER INDEX idx_property_analyses_valid RENAME TO ix_tb_property_analyses_valid;
+ALTER INDEX idx_property_analysis_reviews_answered_at RENAME TO ix_tb_property_analysis_reviews_answered_at;
+ALTER INDEX idx_property_listings_property_id RENAME TO ix_tb_property_listings_property_id;
+ALTER INDEX idx_property_purpose_research_lookup RENAME TO ix_tb_property_purpose_research_lookup;
+ALTER INDEX idx_saved_searches_saved_at RENAME TO ix_tb_saved_searches_saved_at;
+ALTER INDEX idx_scheduler_runs_started_at RENAME TO ix_tb_scheduler_runs_started_at;
+ALTER INDEX idx_search_results_history RENAME TO ix_tb_search_results_history;
+ALTER INDEX idx_search_results_property RENAME TO ix_tb_search_results_property;
+ALTER INDEX idx_search_runs_searched_at RENAME TO ix_tb_search_runs_searched_at;
+
+ALTER INDEX properties_pkey RENAME TO pk_tb_properties;
+ALTER INDEX property_analyses_pkey RENAME TO pk_tb_property_analyses;
+ALTER INDEX property_analysis_reviews_pkey RENAME TO pk_tb_property_analysis_reviews;
+ALTER INDEX property_listings_pkey RENAME TO pk_tb_property_listings;
+ALTER INDEX property_purpose_research_pkey RENAME TO pk_tb_property_purpose_research;
+ALTER INDEX saved_searches_pkey RENAME TO pk_tb_saved_searches;
+ALTER INDEX scheduler_runs_pkey RENAME TO pk_tb_scheduler_runs;
+ALTER INDEX schema_migrations_pkey RENAME TO pk_tb_schema_migrations;
+ALTER INDEX search_results_pkey RENAME TO pk_tb_search_results;
+ALTER INDEX search_runs_pkey RENAME TO pk_tb_search_runs;
+ALTER INDEX source_collections_pkey RENAME TO pk_tb_source_collections;
+ALTER INDEX properties_identity_key_key RENAME TO uq_tb_properties_identity_key;
+ALTER INDEX property_listings_source_external_id_key RENAME TO uq_tb_property_listings_source_external_id;
+ALTER INDEX property_analysis_reviews_analysis_id_key RENAME TO uq_tb_property_analysis_reviews_analysis_id;
+ALTER INDEX saved_searches_search_key_key RENAME TO uq_tb_saved_searches_search_key;
+
+ALTER TABLE tb_property_analyses RENAME CONSTRAINT property_analyses_property_id_fkey TO fk_tb_property_analyses_property;
+ALTER TABLE tb_property_analysis_reviews RENAME CONSTRAINT property_analysis_reviews_analysis_id_fkey TO fk_tb_property_analysis_reviews_analysis;
+ALTER TABLE tb_property_listings RENAME CONSTRAINT property_listings_property_id_fkey TO fk_tb_property_listings_property;
+ALTER TABLE tb_property_purpose_research RENAME CONSTRAINT property_purpose_research_property_id_fkey TO fk_tb_property_purpose_research_property;
+ALTER TABLE tb_scheduler_runs RENAME CONSTRAINT scheduler_runs_saved_search_id_fkey TO fk_tb_scheduler_runs_saved_search;
+ALTER TABLE tb_search_results RENAME CONSTRAINT search_results_property_id_fkey TO fk_tb_search_results_property;
+ALTER TABLE tb_search_results RENAME CONSTRAINT search_results_search_run_id_fkey TO fk_tb_search_results_search_run;
+ALTER TABLE tb_source_collections RENAME CONSTRAINT source_collections_search_run_id_fkey TO fk_tb_source_collections_search_run;
+
+COMMENT ON TABLE tb_schema_migrations IS 'Registra as migrações já aplicadas para o banco evoluir uma única vez.';
+COMMENT ON TABLE tb_search_runs IS 'Guarda cada descoberta e coleta, com filtros, status e totais, para auditoria da pesquisa.';
+COMMENT ON TABLE tb_source_collections IS 'Registra o resultado técnico de cada portal visitado, inclusive bloqueio ou ausência.';
+COMMENT ON TABLE tb_properties IS 'Representa a identidade estável do imóvel, independente do portal que o anunciou.';
+COMMENT ON TABLE tb_property_listings IS 'Relaciona o imóvel a cada anúncio e imobiliária, preservando a URL original.';
+COMMENT ON TABLE tb_search_results IS 'Fotografa cada aparição do imóvel em uma pesquisa e a decisão de elegibilidade.';
+COMMENT ON TABLE tb_property_analyses IS 'Armazena a análise estruturada da IA e sua validade de seis meses.';
+COMMENT ON TABLE tb_property_analysis_reviews IS 'Guarda a resposta humana apenas quando a IA classificou um campo como ambíguo.';
+COMMENT ON TABLE tb_saved_searches IS 'Persiste os filtros que a busca horária e a análise agendada devem repetir.';
+COMMENT ON TABLE tb_scheduler_runs IS 'Histórico das execuções automáticas para explicar sucesso ou falha no agendamento.';
+COMMENT ON TABLE tb_property_purpose_research IS 'Separa a janela semestral de compra e aluguel para uma não bloquear a outra.';
+
+COMMENT ON INDEX ix_tb_properties_last_seen_at IS 'Acelera a leitura dos imóveis vistos recentemente.';
+COMMENT ON INDEX ix_tb_properties_last_researched_at IS 'Apoia diagnósticos da data global de pesquisa herdada antes da separação por finalidade.';
+COMMENT ON INDEX ix_tb_property_analyses_valid IS 'Localiza a análise vigente de um imóvel sem varrer todo o histórico.';
+COMMENT ON INDEX ix_tb_property_analysis_reviews_answered_at IS 'Ordena as respostas humanas mais recentes.';
+COMMENT ON INDEX ix_tb_property_listings_property_id IS 'Encontra todos os anúncios ligados a um mesmo imóvel.';
+COMMENT ON INDEX ix_tb_property_purpose_research_lookup IS 'Verifica rapidamente se a finalidade ainda está na janela de seis meses.';
+COMMENT ON INDEX ix_tb_saved_searches_saved_at IS 'Lista os agendamentos do mais recente para o mais antigo.';
+COMMENT ON INDEX ix_tb_scheduler_runs_started_at IS 'Mostra as execuções automáticas mais recentes.';
+COMMENT ON INDEX ix_tb_search_results_history IS 'Apoia o histórico pela data em que o imóvel apareceu.';
+COMMENT ON INDEX ix_tb_search_results_property IS 'Recupera as aparições anteriores de um imóvel.';
+COMMENT ON INDEX ix_tb_search_runs_searched_at IS 'Seleciona a coleta mais recente.';
+COMMENT ON INDEX pk_tb_properties IS 'Garante uma única identidade interna para cada imóvel.';
+COMMENT ON INDEX uq_tb_properties_identity_key IS 'Impede cadastrar duas vezes o mesmo imóvel canônico.';
+COMMENT ON INDEX pk_tb_property_listings IS 'Identifica cada vínculo entre imóvel e anúncio.';
+COMMENT ON INDEX uq_tb_property_listings_source_external_id IS 'Impede duplicar o mesmo anúncio dentro de uma imobiliária.';
+COMMENT ON INDEX pk_tb_search_runs IS 'Identifica cada execução de pesquisa.';
+COMMENT ON INDEX pk_tb_search_results IS 'Impede o mesmo imóvel de entrar duas vezes na mesma pesquisa.';
+COMMENT ON INDEX pk_tb_saved_searches IS 'Identifica cada agendamento salvo.';
+COMMENT ON INDEX uq_tb_saved_searches_search_key IS 'Impede salvar duas vezes a mesma combinação de filtros.';
+
+COMMENT ON COLUMN tb_properties.identity_key IS 'Chave estável do imóvel, sem preço, para reconhecê-lo depois de mudança de valor.';
+COMMENT ON COLUMN tb_properties.last_researched_at IS 'Data legada da última pesquisa; a vigência atual fica separada por finalidade.';
+COMMENT ON COLUMN tb_search_results.eligible_for_research IS 'Indica se aquela aparição podia seguir para análise na data da coleta.';
+COMMENT ON COLUMN tb_search_results.suppressed_until IS 'Informa até quando uma aparição bloqueada deve permanecer fora da lista nova.';
+COMMENT ON COLUMN tb_property_analyses.purpose IS 'Separa a análise de compra da de aluguel.';
+COMMENT ON COLUMN tb_property_analyses.valid_until IS 'Encerra a reutilização da análise seis meses depois dela.';
+COMMENT ON COLUMN tb_property_purpose_research.purpose IS 'Finalidade cuja janela semestral este registro controla.';
+COMMENT ON COLUMN tb_saved_searches.neighborhoods IS 'Bairros selecionados que a busca automática deve repetir.';
+COMMENT ON COLUMN tb_saved_searches.analysis_interval_minutes IS 'Intervalo escolhido para a análise automática de compra.';
+COMMENT ON COLUMN tb_scheduler_runs.job_kind IS 'Distingue execução de busca e execução de análise.';
+
+CREATE OR REPLACE PROCEDURE pr_record_purpose_research(
+  p_property_id uuid,
+  p_purpose text,
+  p_researched_at timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO tb_property_purpose_research (property_id, purpose, last_researched_at)
+  VALUES (p_property_id, p_purpose, p_researched_at)
+  ON CONFLICT (property_id, purpose) DO UPDATE
+  SET last_researched_at = GREATEST(
+    tb_property_purpose_research.last_researched_at,
+    EXCLUDED.last_researched_at
+  );
+END;
+$$;
+
+COMMENT ON PROCEDURE pr_record_purpose_research IS 'Abre ou renova a janela semestral somente da finalidade analisada, sem afetar a outra.';
+
+ALTER TABLE tb_properties RENAME CONSTRAINT properties_area_m2_check TO ck_tb_properties_area_m2;
+ALTER TABLE tb_properties RENAME CONSTRAINT properties_bedrooms_check TO ck_tb_properties_bedrooms;
+ALTER TABLE tb_properties RENAME CONSTRAINT properties_parking_spaces_check TO ck_tb_properties_parking_spaces;
+ALTER TABLE tb_properties RENAME CONSTRAINT properties_property_type_check TO ck_tb_properties_property_type;
+ALTER TABLE tb_property_analyses RENAME CONSTRAINT property_analyses_analysis_kind_check TO ck_tb_property_analyses_kind;
+ALTER TABLE tb_property_analyses RENAME CONSTRAINT property_analyses_check TO ck_tb_property_analyses_valid_until;
+ALTER TABLE tb_property_analyses RENAME CONSTRAINT property_analyses_purpose_check TO ck_tb_property_analyses_purpose;
+ALTER TABLE tb_property_analysis_reviews RENAME CONSTRAINT property_analysis_reviews_balcony_barbecue_answer_check TO ck_tb_property_analysis_reviews_balcony;
+ALTER TABLE tb_property_analysis_reviews RENAME CONSTRAINT property_analysis_reviews_check TO ck_tb_property_analysis_reviews_answered;
+ALTER TABLE tb_property_analysis_reviews RENAME CONSTRAINT property_analysis_reviews_slab_rights_answer_check TO ck_tb_property_analysis_reviews_slab;
+ALTER TABLE tb_property_purpose_research RENAME CONSTRAINT property_purpose_research_purpose_check TO ck_tb_property_purpose_research_purpose;
+ALTER TABLE tb_saved_searches RENAME CONSTRAINT saved_searches_analysis_batch_count_check TO ck_tb_saved_searches_batch;
+ALTER TABLE tb_saved_searches RENAME CONSTRAINT saved_searches_analysis_interval_minutes_check TO ck_tb_saved_searches_interval;
+ALTER TABLE tb_scheduler_runs RENAME CONSTRAINT scheduler_runs_job_kind_check TO ck_tb_scheduler_runs_job_kind;
+ALTER TABLE tb_scheduler_runs RENAME CONSTRAINT scheduler_runs_status_check TO ck_tb_scheduler_runs_status;
+ALTER TABLE tb_search_results RENAME CONSTRAINT search_results_check TO ck_tb_search_results_eligibility;
+ALTER TABLE tb_search_runs RENAME CONSTRAINT search_runs_discovered_count_check TO ck_tb_search_runs_discovered_count;
+ALTER TABLE tb_search_runs RENAME CONSTRAINT search_runs_eligible_count_check TO ck_tb_search_runs_eligible_count;
+ALTER TABLE tb_search_runs RENAME CONSTRAINT search_runs_status_check TO ck_tb_search_runs_status;
+ALTER TABLE tb_search_runs RENAME CONSTRAINT search_runs_suppressed_count_check TO ck_tb_search_runs_suppressed_count;
+ALTER TABLE tb_source_collections RENAME CONSTRAINT source_collections_duration_ms_check TO ck_tb_source_collections_duration;
+ALTER TABLE tb_source_collections RENAME CONSTRAINT source_collections_found_check TO ck_tb_source_collections_found;
+ALTER TABLE tb_source_collections RENAME CONSTRAINT source_collections_status_check TO ck_tb_source_collections_status;
+
+COMMENT ON INDEX pk_tb_schema_migrations IS 'Impede registrar duas vezes a mesma migração.';
+COMMENT ON INDEX pk_tb_property_analyses IS 'Identifica cada análise da IA.';
+COMMENT ON INDEX pk_tb_property_analysis_reviews IS 'Identifica cada resposta humana.';
+COMMENT ON INDEX uq_tb_property_analysis_reviews_analysis_id IS 'Garante uma única revisão humana por análise.';
+COMMENT ON INDEX pk_tb_property_purpose_research IS 'Mantém uma janela semestral por imóvel e finalidade.';
+COMMENT ON INDEX pk_tb_scheduler_runs IS 'Identifica cada execução automática.';
+COMMENT ON INDEX pk_tb_source_collections IS 'Impede coletar duas vezes a mesma URL na mesma pesquisa.';
+
+COMMENT ON CONSTRAINT pk_tb_schema_migrations ON tb_schema_migrations IS 'Impede registrar duas vezes a mesma migração.';
+COMMENT ON CONSTRAINT pk_tb_search_runs ON tb_search_runs IS 'Identifica cada execução de pesquisa.';
+COMMENT ON CONSTRAINT ck_tb_search_runs_status ON tb_search_runs IS 'Limita o ciclo da pesquisa a descoberta, concluída ou falha.';
+COMMENT ON CONSTRAINT ck_tb_search_runs_discovered_count ON tb_search_runs IS 'Impede contagem negativa de anúncios descobertos.';
+COMMENT ON CONSTRAINT ck_tb_search_runs_eligible_count ON tb_search_runs IS 'Impede contagem negativa de anúncios elegíveis.';
+COMMENT ON CONSTRAINT ck_tb_search_runs_suppressed_count ON tb_search_runs IS 'Impede contagem negativa de anúncios suprimidos.';
+COMMENT ON CONSTRAINT pk_tb_source_collections ON tb_source_collections IS 'Impede coletar duas vezes a mesma URL na mesma pesquisa.';
+COMMENT ON CONSTRAINT fk_tb_source_collections_search_run ON tb_source_collections IS 'Liga a visita ao portal à pesquisa que a originou.';
+COMMENT ON CONSTRAINT ck_tb_source_collections_status ON tb_source_collections IS 'Registra se o portal respondeu, bloqueou, veio vazio ou falhou.';
+COMMENT ON CONSTRAINT ck_tb_source_collections_found ON tb_source_collections IS 'Impede quantidade negativa de anúncios encontrados.';
+COMMENT ON CONSTRAINT ck_tb_source_collections_duration ON tb_source_collections IS 'Impede duração negativa da coleta.';
+COMMENT ON CONSTRAINT pk_tb_properties ON tb_properties IS 'Garante uma única identidade interna para cada imóvel.';
+COMMENT ON CONSTRAINT uq_tb_properties_identity_key ON tb_properties IS 'Impede cadastrar duas vezes o mesmo imóvel canônico.';
+COMMENT ON CONSTRAINT ck_tb_properties_property_type ON tb_properties IS 'Restringe o tipo a apartamento, cobertura ou desconhecido.';
+COMMENT ON CONSTRAINT ck_tb_properties_bedrooms ON tb_properties IS 'Impede quantidade negativa de quartos.';
+COMMENT ON CONSTRAINT ck_tb_properties_parking_spaces ON tb_properties IS 'Impede quantidade negativa de vagas.';
+COMMENT ON CONSTRAINT ck_tb_properties_area_m2 ON tb_properties IS 'Impede área negativa.';
+COMMENT ON CONSTRAINT pk_tb_property_listings ON tb_property_listings IS 'Identifica cada vínculo entre imóvel e anúncio.';
+COMMENT ON CONSTRAINT fk_tb_property_listings_property ON tb_property_listings IS 'Liga o anúncio à identidade estável do imóvel.';
+COMMENT ON CONSTRAINT uq_tb_property_listings_source_external_id ON tb_property_listings IS 'Impede duplicar o mesmo anúncio dentro de uma imobiliária.';
+COMMENT ON CONSTRAINT pk_tb_search_results ON tb_search_results IS 'Impede o mesmo imóvel de entrar duas vezes na mesma pesquisa.';
+COMMENT ON CONSTRAINT fk_tb_search_results_search_run ON tb_search_results IS 'Liga a aparição à pesquisa em que ela foi vista.';
+COMMENT ON CONSTRAINT fk_tb_search_results_property ON tb_search_results IS 'Liga a aparição à identidade estável do imóvel.';
+COMMENT ON CONSTRAINT ck_tb_search_results_eligibility ON tb_search_results IS 'Exige data de supressão só quando a aparição ficou inelegível.';
+COMMENT ON CONSTRAINT pk_tb_property_analyses ON tb_property_analyses IS 'Identifica cada análise da IA.';
+COMMENT ON CONSTRAINT fk_tb_property_analyses_property ON tb_property_analyses IS 'Liga a análise ao imóvel avaliado.';
+COMMENT ON CONSTRAINT ck_tb_property_analyses_kind ON tb_property_analyses IS 'Limita o registro à análise de características do anúncio.';
+COMMENT ON CONSTRAINT ck_tb_property_analyses_valid_until ON tb_property_analyses IS 'Exige que a validade termine depois da data da análise.';
+COMMENT ON CONSTRAINT ck_tb_property_analyses_purpose ON tb_property_analyses IS 'Separa a análise de compra da de aluguel.';
+COMMENT ON CONSTRAINT pk_tb_property_analysis_reviews ON tb_property_analysis_reviews IS 'Identifica cada resposta humana.';
+COMMENT ON CONSTRAINT fk_tb_property_analysis_reviews_analysis ON tb_property_analysis_reviews IS 'Liga a resposta humana à análise ambígua.';
+COMMENT ON CONSTRAINT uq_tb_property_analysis_reviews_analysis_id ON tb_property_analysis_reviews IS 'Garante uma única revisão humana por análise.';
+COMMENT ON CONSTRAINT ck_tb_property_analysis_reviews_slab ON tb_property_analysis_reviews IS 'Aceita somente sim, não ou não sei para a laje.';
+COMMENT ON CONSTRAINT ck_tb_property_analysis_reviews_balcony ON tb_property_analysis_reviews IS 'Aceita somente sim, não ou não sei para a churrasqueira.';
+COMMENT ON CONSTRAINT ck_tb_property_analysis_reviews_answered ON tb_property_analysis_reviews IS 'Exige ao menos uma resposta para não gravar revisão vazia.';
+COMMENT ON CONSTRAINT pk_tb_saved_searches ON tb_saved_searches IS 'Identifica cada agendamento salvo.';
+COMMENT ON CONSTRAINT uq_tb_saved_searches_search_key ON tb_saved_searches IS 'Impede salvar duas vezes a mesma combinação de filtros.';
+COMMENT ON CONSTRAINT ck_tb_saved_searches_interval ON tb_saved_searches IS 'Restringe o intervalo da análise aos valores oferecidos na tela.';
+COMMENT ON CONSTRAINT ck_tb_saved_searches_batch ON tb_saved_searches IS 'Restringe o lote da análise a 5, 10, 15 ou todos.';
+COMMENT ON CONSTRAINT pk_tb_scheduler_runs ON tb_scheduler_runs IS 'Identifica cada execução automática.';
+COMMENT ON CONSTRAINT fk_tb_scheduler_runs_saved_search ON tb_scheduler_runs IS 'Liga a execução ao agendamento e a remove junto com ele.';
+COMMENT ON CONSTRAINT ck_tb_scheduler_runs_job_kind ON tb_scheduler_runs IS 'Distingue execução de busca e execução de análise.';
+COMMENT ON CONSTRAINT ck_tb_scheduler_runs_status ON tb_scheduler_runs IS 'Registra se a execução automática concluiu ou falhou.';
+COMMENT ON CONSTRAINT pk_tb_property_purpose_research ON tb_property_purpose_research IS 'Mantém uma janela semestral por imóvel e finalidade.';
+COMMENT ON CONSTRAINT fk_tb_property_purpose_research_property ON tb_property_purpose_research IS 'Liga a janela semestral ao imóvel analisado.';
+COMMENT ON CONSTRAINT ck_tb_property_purpose_research_purpose ON tb_property_purpose_research IS 'Aceita somente as finalidades compra e aluguel.';
+
+COMMENT ON COLUMN tb_schema_migrations.version IS 'Nome do arquivo aplicado, para a migração não rodar de novo.';
+COMMENT ON COLUMN tb_schema_migrations.applied_at IS 'Momento em que a migração foi confirmada.';
+COMMENT ON COLUMN tb_search_runs.id IS 'Identificador da execução de pesquisa.';
+COMMENT ON COLUMN tb_search_runs.query IS 'Consulta enviada à descoberta, para auditar o que foi pedido.';
+COMMENT ON COLUMN tb_search_runs.city IS 'Cidade usada naquela pesquisa.';
+COMMENT ON COLUMN tb_search_runs.neighborhood IS 'Rótulo dos bairros usados naquela pesquisa.';
+COMMENT ON COLUMN tb_search_runs.filters IS 'Filtros completos daquela execução.';
+COMMENT ON COLUMN tb_search_runs.discovery_response IS 'Resposta bruta da descoberta, para diagnóstico.';
+COMMENT ON COLUMN tb_search_runs.searched_at IS 'Início da pesquisa.';
+COMMENT ON COLUMN tb_search_runs.completed_at IS 'Fim da coleta, quando ela terminou.';
+COMMENT ON COLUMN tb_search_runs.status IS 'Situação da pesquisa: descoberta, concluída ou falha.';
+COMMENT ON COLUMN tb_search_runs.discovered_count IS 'Quantidade de anúncios encontrados antes do filtro de elegibilidade.';
+COMMENT ON COLUMN tb_search_runs.eligible_count IS 'Quantidade que podia seguir para análise.';
+COMMENT ON COLUMN tb_search_runs.suppressed_count IS 'Quantidade mantida fora da lista por já ter análise vigente.';
+COMMENT ON COLUMN tb_search_runs.created_at IS 'Momento em que a linha da pesquisa foi criada.';
+COMMENT ON COLUMN tb_source_collections.search_run_id IS 'Pesquisa à qual a visita do portal pertence.';
+COMMENT ON COLUMN tb_source_collections.source IS 'Portal ou imobiliária visitados.';
+COMMENT ON COLUMN tb_source_collections.search_url IS 'URL consultada naquele portal.';
+COMMENT ON COLUMN tb_source_collections.status IS 'Resultado técnico da visita.';
+COMMENT ON COLUMN tb_source_collections.http_status IS 'Código HTTP recebido, quando o portal respondeu.';
+COMMENT ON COLUMN tb_source_collections.found IS 'Quantidade de anúncios lidos naquela visita.';
+COMMENT ON COLUMN tb_source_collections.message IS 'Detalhe de bloqueio, ausência ou erro.';
+COMMENT ON COLUMN tb_source_collections.duration_ms IS 'Tempo gasto na visita, para diagnosticar lentidão.';
+COMMENT ON COLUMN tb_source_collections.collected_at IS 'Momento em que a visita terminou.';
+COMMENT ON COLUMN tb_properties.id IS 'Identidade interna estável do imóvel.';
+COMMENT ON COLUMN tb_properties.property_type IS 'Tipo divulgado: apartamento, cobertura ou desconhecido.';
+COMMENT ON COLUMN tb_properties.neighborhood IS 'Bairro atribuído ao imóvel a partir do anúncio.';
+COMMENT ON COLUMN tb_properties.location IS 'Localização aproximada divulgada, sem completar o que faltou.';
+COMMENT ON COLUMN tb_properties.bedrooms IS 'Quartos informados no anúncio.';
+COMMENT ON COLUMN tb_properties.parking_spaces IS 'Vagas informadas no anúncio.';
+COMMENT ON COLUMN tb_properties.area_m2 IS 'Área informada no anúncio.';
+COMMENT ON COLUMN tb_properties.first_seen_at IS 'Primeira vez em que o imóvel apareceu.';
+COMMENT ON COLUMN tb_properties.last_seen_at IS 'Última vez em que o imóvel apareceu.';
+COMMENT ON COLUMN tb_properties.created_at IS 'Momento de criação da identidade do imóvel.';
+COMMENT ON COLUMN tb_properties.updated_at IS 'Momento da última atualização dos dados estáveis.';
+COMMENT ON COLUMN tb_property_listings.id IS 'Identificador do vínculo entre imóvel e anúncio.';
+COMMENT ON COLUMN tb_property_listings.property_id IS 'Imóvel ao qual o anúncio pertence.';
+COMMENT ON COLUMN tb_property_listings.source IS 'Imobiliária ou portal do anúncio.';
+COMMENT ON COLUMN tb_property_listings.external_id IS 'Identificador do anúncio na origem.';
+COMMENT ON COLUMN tb_property_listings.canonical_url IS 'Link direto do anúncio.';
+COMMENT ON COLUMN tb_property_listings.source_search_url IS 'Página de busca da origem em que o anúncio foi encontrado.';
+COMMENT ON COLUMN tb_property_listings.first_seen_at IS 'Primeira vez em que esse anúncio foi visto.';
+COMMENT ON COLUMN tb_property_listings.last_seen_at IS 'Última vez em que esse anúncio foi visto.';
+COMMENT ON COLUMN tb_search_results.search_run_id IS 'Pesquisa em que o imóvel apareceu.';
+COMMENT ON COLUMN tb_search_results.property_id IS 'Imóvel visto naquela pesquisa.';
+COMMENT ON COLUMN tb_search_results.listing_snapshot IS 'Cópia dos dados divulgados naquela aparição.';
+COMMENT ON COLUMN tb_search_results.seen_at IS 'Momento da aparição.';
+COMMENT ON COLUMN tb_property_analyses.id IS 'Identificador da análise da IA.';
+COMMENT ON COLUMN tb_property_analyses.property_id IS 'Imóvel analisado.';
+COMMENT ON COLUMN tb_property_analyses.analysis_kind IS 'Tipo da análise armazenada.';
+COMMENT ON COLUMN tb_property_analyses.result IS 'Resultado estruturado da IA, sem reescrever o anúncio.';
+COMMENT ON COLUMN tb_property_analyses.model IS 'Modelo usado, para saber qual versão produziu o resultado.';
+COMMENT ON COLUMN tb_property_analyses.description_source IS 'Origem do texto analisado.';
+COMMENT ON COLUMN tb_property_analyses.analyzed_at IS 'Momento da análise, início da janela de seis meses.';
+COMMENT ON COLUMN tb_property_analyses.created_at IS 'Momento em que a análise foi gravada.';
+COMMENT ON COLUMN tb_property_analysis_reviews.id IS 'Identificador da resposta humana.';
+COMMENT ON COLUMN tb_property_analysis_reviews.analysis_id IS 'Análise ambígua que a pessoa respondeu.';
+COMMENT ON COLUMN tb_property_analysis_reviews.slab_rights_answer IS 'Resposta humana sobre direito à laje, sem alterar o resultado da IA.';
+COMMENT ON COLUMN tb_property_analysis_reviews.balcony_barbecue_answer IS 'Resposta humana sobre churrasqueira na varanda, sem alterar o resultado da IA.';
+COMMENT ON COLUMN tb_property_analysis_reviews.answered_at IS 'Momento da resposta humana.';
+COMMENT ON COLUMN tb_saved_searches.id IS 'Identificador do agendamento.';
+COMMENT ON COLUMN tb_saved_searches.search_key IS 'Resumo estável dos filtros, para reconhecer a mesma pesquisa.';
+COMMENT ON COLUMN tb_saved_searches.title IS 'Nome legível do agendamento na tela.';
+COMMENT ON COLUMN tb_saved_searches.city IS 'Cidade que a busca automática deve repetir.';
+COMMENT ON COLUMN tb_saved_searches.neighborhood IS 'Rótulo curto dos bairros selecionados.';
+COMMENT ON COLUMN tb_saved_searches.filters IS 'Filtros completos repetidos pela busca automática.';
+COMMENT ON COLUMN tb_saved_searches.saved_at IS 'Momento em que o agendamento foi salvo ou atualizado.';
+COMMENT ON COLUMN tb_saved_searches.analysis_batch_count IS 'Quantidade de anúncios de compra enviados à IA em cada rodada.';
+COMMENT ON COLUMN tb_saved_searches.last_searched_at IS 'Última busca automática, usada para calcular a próxima hora.';
+COMMENT ON COLUMN tb_saved_searches.last_analyzed_at IS 'Última análise automática, usada para calcular o próximo intervalo.';
+COMMENT ON COLUMN tb_saved_searches.latest_search_run_id IS 'Coleta concluída que a análise automática pode usar.';
+COMMENT ON COLUMN tb_saved_searches.search_error IS 'Última falha da busca automática.';
+COMMENT ON COLUMN tb_saved_searches.analysis_error IS 'Última falha da análise automática.';
+COMMENT ON COLUMN tb_scheduler_runs.id IS 'Identificador da execução automática.';
+COMMENT ON COLUMN tb_scheduler_runs.saved_search_id IS 'Agendamento que originou a execução.';
+COMMENT ON COLUMN tb_scheduler_runs.status IS 'Conclusão ou falha da execução automática.';
+COMMENT ON COLUMN tb_scheduler_runs.message IS 'Explicação curta do resultado da execução.';
+COMMENT ON COLUMN tb_scheduler_runs.started_at IS 'Início da execução automática.';
+COMMENT ON COLUMN tb_scheduler_runs.finished_at IS 'Fim da execução automática.';
+COMMENT ON COLUMN tb_property_purpose_research.property_id IS 'Imóvel cuja janela semestral está registrada.';
+COMMENT ON COLUMN tb_property_purpose_research.last_researched_at IS 'Início da janela de seis meses daquela finalidade.';

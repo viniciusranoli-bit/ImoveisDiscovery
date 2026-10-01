@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   answerAnalysisAmbiguity,
+  readRentHistory,
   readSuppressedHistory,
   type AnalysisReviewAnswer,
 } from "@/lib/db/repository";
@@ -10,8 +11,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const limit = Number(new URL(request.url).searchParams.get("limit") ?? 50);
-    const items = await readSuppressedHistory(Number.isFinite(limit) ? limit : 50);
+    const url = new URL(request.url);
+    const limit = Number(url.searchParams.get("limit") ?? 50);
+    const purpose = url.searchParams.get("purpose") === "rent" ? "rent" : "sale";
+    const safeLimit = Number.isFinite(limit) ? limit : 50;
+    const items = purpose === "rent"
+      ? await readRentHistory(safeLimit)
+      : await readSuppressedHistory(safeLimit, "sale");
     return NextResponse.json(
       { items },
       { headers: { "cache-control": "no-store" } },

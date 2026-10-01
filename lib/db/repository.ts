@@ -8,6 +8,9 @@ import {
   type SerperCollection,
   type SourceCollectionStatus,
 } from "../listings";
+import type { ListingPurpose } from "../listings";
+import { neighborhoodLabel, normalizeNeighborhoods } from "../neighborhoods";
+import type { AnalysisBatchCount, AnalysisIntervalMinutes } from "../schedule";
 import type {
   PropertyFeatureAnalysis,
   SavedPropertyAnalysis,
@@ -35,6 +38,8 @@ export type SuppressedHistoryItem = {
   slabRightsAnswer?: AnalysisReviewAnswer;
   balconyBarbecueAnswer?: AnalysisReviewAnswer;
   category: HistoryResultCategory;
+  purpose: ListingPurpose;
+  rentAmount?: number;
 };
 
 export type AnalysisReviewAnswer = "yes" | "no" | "unknown";
@@ -50,85 +55,302 @@ export type SavedSearch = {
   title: string;
   city: string;
   neighborhood: string;
+  neighborhoods: string[];
   filters: SearchFilters;
   savedAt: string;
+  analysisIntervalMinutes: AnalysisIntervalMinutes;
+  analysisBatchCount: AnalysisBatchCount;
+  lastSearchedAt: string | null;
+  lastAnalyzedAt: string | null;
+  latestSearchRunId: string | null;
+  searchError: string | null;
+  analysisError: string | null;
+  analysisEnabled: boolean;
 };
 
-export async function saveSavedSearch(input: {
+type SavedSearchRow = {
+  id: string;
+  title: string;
   city: string;
   neighborhood: string;
+  neighborhoods: string[] | null;
   filters: SearchFilters;
-}) {
-  const searchKey = createHash("sha256")
-    .update(json({ city: input.city, neighborhood: input.neighborhood, filters: input.filters }))
-    .digest("hex");
-  const purpose = input.filters.purpose === "sale" ? "Compra" : "Aluguel";
-  const title = `${purpose} · ${input.neighborhood} · ${input.filters.bedroomsMin}+ quartos`;
-  const result = await query<{
-    id: string;
-    title: string;
-    city: string;
-    neighborhood: string;
-    filters: SearchFilters;
-    saved_at: Date;
-  }>(
-    `
-      INSERT INTO saved_searches (
-        id, search_key, title, city, neighborhood, filters, saved_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
-      ON CONFLICT (search_key) DO UPDATE SET
-        title = EXCLUDED.title,
-        saved_at = now()
-      RETURNING id, title, city, neighborhood, filters, saved_at
-    `,
-    [randomUUID(), searchKey, title, input.city, input.neighborhood, json(input.filters)],
-  );
-  const row = result.rows[0];
+  saved_at: Date;
+  analysis_interval_minutes: AnalysisIntervalMinutes;
+  analysis_batch_count: AnalysisBatchCount;
+  last_searched_at: Date | null;
+  last_analyzed_at: Date | null;
+  latest_search_run_id: string | null;
+  search_error: string | null;
+  analysis_error: string | null;
+  analysis_enabled: boolean;
+};
+
+const savedSearchColumns = `
+  id, title, city, neighborhood, neighborhoods, filters, saved_at,
+  analysis_interval_minutes, analysis_batch_count,
+  last_searched_at, last_analyzed_at, latest_search_run_id,
+  search_error, analysis_error, analysis_enabled
+`;
+
+function mapSavedSearch(row: SavedSearchRow): SavedSearch {
+  const batchCount = String(row.analysis_batch_count);
   return {
     id: row.id,
     title: row.title,
     city: row.city,
     neighborhood: row.neighborhood,
+    neighborhoods: normalizeNeighborhoods(row.neighborhoods?.length ? row.neighborhoods : [row.neighborhood]),
     filters: row.filters,
     savedAt: row.saved_at.toISOString(),
-  } satisfies SavedSearch;
+    analysisIntervalMinutes: Number(row.analysis_interval_minutes) as AnalysisIntervalMinutes,
+    analysisBatchCount: batchCount === "all" ? "all" : (Number(batchCount) as 5 | 10 | 15),
+    lastSearchedAt: row.last_searched_at?.toISOString() ?? null,
+    lastAnalyzedAt: row.last_analyzed_at?.toISOString() ?? null,
+    latestSearchRunId: row.latest_search_run_id,
+    searchError: row.search_error,
+    analysisError: row.analysis_error,
+    analysisEnabled: row.analysis_enabled !== false,
+  };
 }
 
-export async function readSavedSearches(limit = 20) {
+export async function saveSavedSearch(input: {
+  city: string;
+  neighborhoods: string[];
+  filters: SearchFilters;
+}) {
+  const neighborhoods = normalizeNeighborhoods(input.neighborhoods);
+  const label = neighborhoodLabel(neighborhoods);
+  const searchKey = createHash("sha256")
+    .update(json({ city: input.city, neighborhoods, filters: input.filters }))
+    .digest("hex");
+  const purpose = input.filters.purpose === "sale" ? "Compra" : "Aluguel";
+  const title = `${purpose} · ${label} · ${input.filters.bedroomsMin}+ quartos`;
+  const result = await query<SavedSearchRow>(
+    `
+      INSERT INTO tb_saved_searches (
+        id, search_key, title, city, neighborhood, neighborhoods, filters, saved_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, now())
+      ON CONFLICT (search_key) DO UPDATE SET
+        title = EXCLUDED.title,
+        saved_at = now()
+      RETURNING ${savedSearchColumns}
+    `,
+    [randomUUID(), searchKey, title, input.city, label, json(neighborhoods), json(input.filters)],
+  );
+  return mapSavedSearch(result.rows[0]);
+}
+
+export async function updateSavedSearchSchedule(input: {
+  id: string;
+  analysisIntervalMinutes: AnalysisIntervalMinutes;
+  analysisBatchCount: AnalysisBatchCount;
+  analysisEnabled: boolean;
+}) {
+  const result = await query<SavedSearchRow>(
+    `
+      UPDATE tb_saved_searches
+      SET analysis_interval_minutes = $2,
+          analysis_batch_count = $3,
+          analysis_enabled = $4
+      WHERE id = $1
+      RETURNING ${savedSearchColumns}
+    `,
+    [input.id, input.analysisIntervalMinutes, String(input.analysisBatchCount), input.analysisEnabled],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("Pesquisa salva não encontrada.");
+  return mapSavedSearch(row);
+}
+
+function savedSearchIdentity(input: {
+  city: string;
+  neighborhoods: string[];
+  filters: SearchFilters;
+}) {
+  const neighborhoods = normalizeNeighborhoods(input.neighborhoods);
+  const label = neighborhoodLabel(neighborhoods);
+  const searchKey = createHash("sha256")
+    .update(json({ city: input.city, neighborhoods, filters: input.filters }))
+    .digest("hex");
+  const purpose = input.filters.purpose === "sale" ? "Compra" : "Aluguel";
+  return {
+    neighborhoods,
+    label,
+    searchKey,
+    title: `${purpose} · ${label} · ${input.filters.bedroomsMin}+ quartos`,
+  };
+}
+
+function rethrowSavedSearchConflict(error: unknown): never {
+  if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+    throw new Error("Já existe um agendamento com esses filtros.");
+  }
+  throw error;
+}
+
+export async function updateSavedSearch(input: {
+  id: string;
+  city: string;
+  neighborhoods: string[];
+  filters: SearchFilters;
+}) {
+  const identity = savedSearchIdentity(input);
+  try {
+    const result = await query<SavedSearchRow>(
+      `
+        UPDATE tb_saved_searches
+        SET search_key = $2,
+            title = $3,
+            city = $4,
+            neighborhood = $5,
+            neighborhoods = $6::jsonb,
+            filters = $7::jsonb,
+            saved_at = now()
+        WHERE id = $1
+        RETURNING ${savedSearchColumns}
+      `,
+      [
+        input.id,
+        identity.searchKey,
+        identity.title,
+        input.city,
+        identity.label,
+        json(identity.neighborhoods),
+        json(input.filters),
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Pesquisa salva não encontrada.");
+    return mapSavedSearch(row);
+  } catch (error) {
+    rethrowSavedSearchConflict(error);
+  }
+}
+
+export async function deleteSavedSearch(id: string) {
+  const result = await query("DELETE FROM tb_saved_searches WHERE id = $1", [id]);
+  if (!result.rowCount) throw new Error("Pesquisa salva não encontrada.");
+}
+
+export async function deleteSchedulerRun(id: string) {
+  const result = await query("DELETE FROM tb_scheduler_runs WHERE id = $1", [id]);
+  if (!result.rowCount) throw new Error("Execução não encontrada.");
+}
+
+export async function markScheduledSearch(
+  id: string,
+  input: { searchedAt: string; searchRunId?: string; error?: string },
+) {
+  await query(
+    `
+      UPDATE tb_saved_searches
+      SET last_searched_at = $2,
+          latest_search_run_id = COALESCE($3, latest_search_run_id),
+          search_error = $4
+      WHERE id = $1
+    `,
+    [id, input.searchedAt, input.searchRunId ?? null, input.error ?? null],
+  );
+}
+
+export async function markScheduledAnalysis(
+  id: string,
+  input: { analyzedAt: string; error?: string },
+) {
+  await query(
+    `
+      UPDATE tb_saved_searches
+      SET last_analyzed_at = $2,
+          analysis_error = $3
+      WHERE id = $1
+    `,
+    [id, input.analyzedAt, input.error ?? null],
+  );
+}
+
+export async function recordSchedulerRun(input: {
+  savedSearchId: string;
+  jobKind: "search" | "analysis";
+  status: "completed" | "failed";
+  message: string;
+  startedAt: string;
+  finishedAt: string;
+}) {
+  await query(
+    `
+      INSERT INTO tb_scheduler_runs (
+        id, saved_search_id, job_kind, status, message, started_at, finished_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `,
+    [
+      randomUUID(),
+      input.savedSearchId,
+      input.jobKind,
+      input.status,
+      input.message,
+      input.startedAt,
+      input.finishedAt,
+    ],
+  );
+}
+
+export async function readRecentSchedulerRuns(limit = 12) {
   const result = await query<{
     id: string;
+    saved_search_id: string;
     title: string;
-    city: string;
-    neighborhood: string;
-    filters: SearchFilters;
-    saved_at: Date;
+    job_kind: "search" | "analysis";
+    status: "completed" | "failed";
+    message: string | null;
+    finished_at: Date;
   }>(
     `
-      SELECT id, title, city, neighborhood, filters, saved_at
-      FROM saved_searches
+      SELECT
+        run.id,
+        run.saved_search_id,
+        saved.title,
+        run.job_kind,
+        run.status,
+        run.message,
+        run.finished_at
+      FROM tb_scheduler_runs run
+      JOIN tb_saved_searches saved ON saved.id = run.saved_search_id
+      ORDER BY run.finished_at DESC
+      LIMIT $1
+    `,
+    [Math.max(1, Math.min(50, limit))],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    savedSearchId: row.saved_search_id,
+    title: row.title,
+    jobKind: row.job_kind,
+    status: row.status,
+    message: row.message,
+    finishedAt: row.finished_at.toISOString(),
+  }));
+}
+
+export async function readSavedSearches(limit = 50) {
+  const result = await query<SavedSearchRow>(
+    `
+      SELECT ${savedSearchColumns}
+      FROM tb_saved_searches
       ORDER BY saved_at DESC
       LIMIT $1
     `,
     [Math.max(1, Math.min(100, limit))],
   );
-  return result.rows.map(
-    (row) =>
-      ({
-        id: row.id,
-        title: row.title,
-        city: row.city,
-        neighborhood: row.neighborhood,
-        filters: row.filters,
-        savedAt: row.saved_at.toISOString(),
-      }) satisfies SavedSearch,
-  );
+  return result.rows.map(mapSavedSearch);
 }
 
 export async function saveDiscovery(collection: SerperCollection) {
   await query(
     `
-      INSERT INTO search_runs (
+      INSERT INTO tb_search_runs (
         id, query, city, neighborhood, filters, discovery_response,
         searched_at, status, discovered_count
       )
@@ -164,13 +386,13 @@ export async function readDiscovery(id: string): Promise<SerperCollection> {
   }>(
     `
       SELECT id, searched_at, city, neighborhood, query, filters, discovery_response
-      FROM search_runs
+      FROM tb_search_runs
       WHERE id = $1
     `,
     [id],
   );
   const row = result.rows[0];
-  if (!row) throw new Error("Coleta da Serper não encontrada no banco de dados.");
+  if (!row) throw new Error("Coleta não encontrada no banco de dados.");
   return {
     id: row.id,
     collectedAt: row.searched_at.toISOString(),
@@ -195,7 +417,7 @@ async function upsertProperty(
     suppressed_until: Date | null;
   }>(
     `
-      INSERT INTO properties (
+      INSERT INTO tb_properties (
         id, identity_key, property_type, neighborhood, location, bedrooms,
         parking_spaces, area_m2, first_seen_at, last_seen_at
       )
@@ -203,20 +425,13 @@ async function upsertProperty(
       ON CONFLICT (identity_key) DO UPDATE SET
         property_type = EXCLUDED.property_type,
         neighborhood = EXCLUDED.neighborhood,
-        location = COALESCE(EXCLUDED.location, properties.location),
-        bedrooms = COALESCE(EXCLUDED.bedrooms, properties.bedrooms),
-        parking_spaces = COALESCE(EXCLUDED.parking_spaces, properties.parking_spaces),
-        area_m2 = COALESCE(EXCLUDED.area_m2, properties.area_m2),
-        last_seen_at = GREATEST(properties.last_seen_at, EXCLUDED.last_seen_at),
+        location = COALESCE(EXCLUDED.location, tb_properties.location),
+        bedrooms = COALESCE(EXCLUDED.bedrooms, tb_properties.bedrooms),
+        parking_spaces = COALESCE(EXCLUDED.parking_spaces, tb_properties.parking_spaces),
+        area_m2 = COALESCE(EXCLUDED.area_m2, tb_properties.area_m2),
+        last_seen_at = GREATEST(tb_properties.last_seen_at, EXCLUDED.last_seen_at),
         updated_at = now()
-      RETURNING
-        id,
-        last_researched_at,
-        (
-          last_researched_at IS NULL
-          OR last_researched_at <= $9::timestamptz - INTERVAL '6 months'
-        ) AS eligible,
-        last_researched_at + INTERVAL '6 months' AS suppressed_until
+      RETURNING id
     `,
     [
       randomUUID(),
@@ -230,7 +445,29 @@ async function upsertProperty(
       seenAt,
     ],
   );
-  return result.rows[0];
+  const propertyId = result.rows[0].id;
+  const window = await client.query<{
+    last_researched_at: Date | null;
+    eligible: boolean;
+    suppressed_until: Date | null;
+  }>(
+    `
+      SELECT
+        research.last_researched_at,
+        (
+          research.last_researched_at IS NULL
+          OR research.last_researched_at <= $3::timestamptz - INTERVAL '6 months'
+        ) AS eligible,
+        research.last_researched_at + INTERVAL '6 months' AS suppressed_until
+      FROM tb_properties property
+      LEFT JOIN tb_property_purpose_research research
+        ON research.property_id = property.id
+       AND research.purpose = $2
+      WHERE property.id = $1
+    `,
+    [propertyId, listing.purpose, seenAt],
+  );
+  return { id: propertyId, ...window.rows[0] };
 }
 
 async function upsertListingAliases(
@@ -243,7 +480,7 @@ async function upsertListingAliases(
   for (const source of listing.sources.length ? listing.sources : [listing.source]) {
     await client.query(
       `
-        INSERT INTO property_listings (
+        INSERT INTO tb_property_listings (
           id, property_id, source, external_id, canonical_url,
           source_search_url, first_seen_at, last_seen_at
         )
@@ -252,7 +489,7 @@ async function upsertListingAliases(
           property_id = EXCLUDED.property_id,
           canonical_url = EXCLUDED.canonical_url,
           source_search_url = EXCLUDED.source_search_url,
-          last_seen_at = GREATEST(property_listings.last_seen_at, EXCLUDED.last_seen_at)
+          last_seen_at = GREATEST(tb_property_listings.last_seen_at, EXCLUDED.last_seen_at)
       `,
       [
         randomUUID(),
@@ -276,7 +513,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
     }>(
       `
         SELECT status, eligible_count, suppressed_count
-        FROM search_runs
+        FROM tb_search_runs
         WHERE id = $1
         FOR UPDATE
       `,
@@ -289,7 +526,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
       const savedListings = await client.query<{ listing_snapshot: CollectedListing }>(
         `
           SELECT listing_snapshot
-          FROM search_results
+          FROM tb_search_results
           WHERE search_run_id = $1 AND eligible_for_research = true
           ORDER BY seen_at DESC
         `,
@@ -305,7 +542,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
             found,
             message,
             duration_ms AS "durationMs"
-          FROM source_collections
+          FROM tb_source_collections
           WHERE search_run_id = $1
           ORDER BY duration_ms
         `,
@@ -324,7 +561,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
     for (const source of run.sources) {
       await client.query(
         `
-          INSERT INTO source_collections (
+          INSERT INTO tb_source_collections (
             search_run_id, source, search_url, status, http_status,
             found, message, duration_ms, collected_at
           )
@@ -363,7 +600,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
       }
       await client.query(
         `
-          INSERT INTO search_results (
+          INSERT INTO tb_search_results (
             search_run_id, property_id, listing_snapshot, seen_at,
             eligible_for_research, suppressed_until
           )
@@ -387,7 +624,7 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
 
     await client.query(
       `
-        UPDATE search_runs SET
+        UPDATE tb_search_runs SET
           completed_at = $2,
           status = 'completed',
           discovered_count = $3,
@@ -416,7 +653,7 @@ export async function readLatestPortalRun(): Promise<MultiPortalRun> {
   }>(
     `
       SELECT id, completed_at, filters, discovered_count, suppressed_count
-      FROM search_runs
+      FROM tb_search_runs
       WHERE status = 'completed'
       ORDER BY completed_at DESC
       LIMIT 1
@@ -428,13 +665,16 @@ export async function readLatestPortalRun(): Promise<MultiPortalRun> {
     query<{ listing_snapshot: CollectedListing }>(
       `
         SELECT sr.listing_snapshot
-        FROM search_results sr
-        JOIN properties p ON p.id = sr.property_id
+        FROM tb_search_results sr
+        JOIN tb_properties p ON p.id = sr.property_id
         WHERE sr.search_run_id = $1
           AND sr.eligible_for_research = true
-          AND (
-            p.last_researched_at IS NULL
-            OR p.last_researched_at <= now() - INTERVAL '6 months'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM tb_property_purpose_research research
+            WHERE research.property_id = p.id
+              AND research.purpose = COALESCE(sr.listing_snapshot->>'purpose', 'sale')
+              AND research.last_researched_at > now() - INTERVAL '6 months'
           )
         ORDER BY sr.seen_at DESC
       `,
@@ -450,7 +690,7 @@ export async function readLatestPortalRun(): Promise<MultiPortalRun> {
           found,
           message,
           duration_ms AS "durationMs"
-        FROM source_collections
+        FROM tb_source_collections
         WHERE search_run_id = $1
         ORDER BY duration_ms
       `,
@@ -476,7 +716,7 @@ export async function getPropertyAnalysisContext(runId: string, listingId: strin
   }>(
     `
       SELECT sr.property_id, sr.listing_snapshot
-      FROM search_results sr
+      FROM tb_search_results sr
       WHERE sr.search_run_id = $1
         AND sr.eligible_for_research = true
         AND sr.listing_snapshot->>'id' = $2
@@ -493,13 +733,17 @@ export async function getEligiblePropertyAnalysisContexts(runId: string) {
   }>(
     `
       SELECT sr.property_id, sr.listing_snapshot
-      FROM search_results sr
-      JOIN properties p ON p.id = sr.property_id
+      FROM tb_search_results sr
+      JOIN tb_properties p ON p.id = sr.property_id
       WHERE sr.search_run_id = $1
         AND sr.eligible_for_research = true
-        AND (
-          p.last_researched_at IS NULL
-          OR p.last_researched_at <= now() - INTERVAL '6 months'
+        AND COALESCE(sr.listing_snapshot->>'purpose', 'sale') = 'sale'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tb_property_purpose_research research
+          WHERE research.property_id = p.id
+            AND research.purpose = 'sale'
+            AND research.last_researched_at > now() - INTERVAL '6 months'
         )
       ORDER BY
         CASE
@@ -514,7 +758,10 @@ export async function getEligiblePropertyAnalysisContexts(runId: string) {
   return result.rows;
 }
 
-export async function readValidPropertyAnalysis(propertyId: string) {
+export async function readValidPropertyAnalysis(
+  propertyId: string,
+  purpose: ListingPurpose = "sale",
+) {
   const result = await query<{
     result: Omit<
       SavedPropertyAnalysis,
@@ -526,14 +773,15 @@ export async function readValidPropertyAnalysis(propertyId: string) {
   }>(
     `
       SELECT result, analyzed_at, model, description_source
-      FROM property_analyses
+      FROM tb_property_analyses
       WHERE property_id = $1
         AND analysis_kind = 'features'
+        AND purpose = $2
         AND valid_until > now()
       ORDER BY analyzed_at DESC
       LIMIT 1
     `,
-    [propertyId],
+    [propertyId, purpose],
   );
   return result.rows[0];
 }
@@ -541,19 +789,21 @@ export async function readValidPropertyAnalysis(propertyId: string) {
 export async function saveDbPropertyAnalysis(
   propertyId: string,
   analysis: SavedPropertyAnalysis,
+  purpose: ListingPurpose = "sale",
 ) {
   await withTransaction(async (client) => {
     await client.query(
       `
-        INSERT INTO property_analyses (
-          id, property_id, analysis_kind, result, model,
+        INSERT INTO tb_property_analyses (
+          id, property_id, analysis_kind, purpose, result, model,
           description_source, analyzed_at, valid_until
         )
-        VALUES ($1, $2, 'features', $3::jsonb, $4, $5, $6, $6::timestamptz + INTERVAL '6 months')
+        VALUES ($1, $2, 'features', $3, $4::jsonb, $5, $6, $7, $7::timestamptz + INTERVAL '6 months')
       `,
       [
         randomUUID(),
         propertyId,
+        purpose,
         json({
           slabRights: analysis.slabRights,
           balconyBarbecue: analysis.balconyBarbecue,
@@ -565,21 +815,18 @@ export async function saveDbPropertyAnalysis(
         analysis.analyzedAt,
       ],
     );
-    await client.query(
-      `
-        UPDATE properties
-        SET last_researched_at = GREATEST(
-          COALESCE(last_researched_at, $2::timestamptz),
-          $2::timestamptz
-        ), updated_at = now()
-        WHERE id = $1
-      `,
-      [propertyId, analysis.analyzedAt],
-    );
+    await client.query("CALL pr_record_purpose_research($1, $2, $3)", [
+      propertyId,
+      purpose,
+      analysis.analyzedAt,
+    ]);
   });
 }
 
-export async function readSuppressedHistory(limit = 50) {
+export async function readSuppressedHistory(
+  limit = 50,
+  purpose: ListingPurpose = "sale",
+) {
   const result = await query<{
     search_run_id: string;
     property_id: string;
@@ -608,16 +855,17 @@ export async function readSuppressedHistory(limit = 50) {
           pa.valid_until,
           listing.source,
           listing.canonical_url
-        FROM property_analyses pa
+        FROM tb_property_analyses pa
         JOIN LATERAL (
           SELECT pl.source, pl.canonical_url
-          FROM property_listings pl
+          FROM tb_property_listings pl
           WHERE pl.property_id = pa.property_id
             AND pl.canonical_url = pa.description_source
           ORDER BY pl.last_seen_at DESC
           LIMIT 1
         ) listing ON true
         WHERE pa.analysis_kind = 'features'
+          AND pa.purpose = $2
           AND pa.valid_until > now()
         ORDER BY
           pa.property_id,
@@ -631,7 +879,7 @@ export async function readSuppressedHistory(limit = 50) {
         COALESCE(snapshot.listing_snapshot->>'title', 'Imóvel analisado') AS title,
         history.source,
         history.canonical_url AS link,
-        COALESCE(snapshot.listing_snapshot->>'neighborhood', properties.neighborhood) AS neighborhood,
+        COALESCE(snapshot.listing_snapshot->>'neighborhood', tb_properties.neighborhood) AS neighborhood,
         history.analyzed_at AS seen_at,
         history.valid_until AS suppressed_until,
         history.analysis_id,
@@ -639,21 +887,21 @@ export async function readSuppressedHistory(limit = 50) {
         review.slab_rights_answer,
         review.balcony_barbecue_answer
       FROM latest_analyses history
-      JOIN properties ON properties.id = history.property_id
+      JOIN tb_properties ON tb_properties.id = history.property_id
       LEFT JOIN LATERAL (
         SELECT sr.search_run_id, sr.listing_snapshot
-        FROM search_results sr
+        FROM tb_search_results sr
         WHERE sr.property_id = history.property_id
           AND sr.listing_snapshot->>'link' = history.canonical_url
         ORDER BY sr.seen_at DESC
         LIMIT 1
       ) snapshot ON true
-      LEFT JOIN property_analysis_reviews review
+      LEFT JOIN tb_property_analysis_reviews review
         ON review.analysis_id = history.analysis_id
       ORDER BY history.analyzed_at DESC
       LIMIT $1
     `,
-    [Math.max(1, Math.min(200, limit))],
+    [Math.max(1, Math.min(200, limit)), purpose],
   );
   return result.rows.map((row): SuppressedHistoryItem => {
     const slabAmbiguous =
@@ -699,6 +947,70 @@ export async function readSuppressedHistory(limit = 50) {
         ? { balconyBarbecueAnswer: row.balcony_barbecue_answer }
         : {}),
       category,
+      purpose,
+    };
+  });
+}
+
+export async function readRentHistory(limit = 50) {
+  const result = await query<{
+    search_run_id: string;
+    property_id: string;
+    listing_id: string;
+    title: string;
+    source: string;
+    link: string;
+    neighborhood: string;
+    price: string | null;
+    seen_at: Date;
+  }>(
+    `
+      SELECT *
+      FROM (
+        SELECT DISTINCT ON (
+          sr.property_id,
+          lower(trim(sr.listing_snapshot->>'source'))
+        )
+          sr.search_run_id::text,
+          sr.property_id,
+          COALESCE(sr.listing_snapshot->>'id', '') AS listing_id,
+          COALESCE(sr.listing_snapshot->>'title', 'Imóvel de aluguel') AS title,
+          COALESCE(sr.listing_snapshot->>'source', '') AS source,
+          COALESCE(sr.listing_snapshot->>'link', '') AS link,
+          COALESCE(sr.listing_snapshot->>'neighborhood', '') AS neighborhood,
+          sr.listing_snapshot->>'price' AS price,
+          sr.seen_at
+        FROM tb_search_results sr
+        WHERE sr.listing_snapshot->>'purpose' = 'rent'
+        ORDER BY
+          sr.property_id,
+          lower(trim(sr.listing_snapshot->>'source')),
+          sr.seen_at DESC
+      ) history
+      ORDER BY seen_at DESC
+      LIMIT $1
+    `,
+    [Math.max(1, Math.min(200, limit))],
+  );
+  return result.rows.map((row): SuppressedHistoryItem => {
+    const price = row.price ? Number(row.price) : undefined;
+    return {
+      searchRunId: row.search_run_id,
+      propertyId: row.property_id,
+      listingId: row.listing_id,
+      title: row.title,
+      source: row.source,
+      link: row.link,
+      neighborhood: row.neighborhood,
+      seenAt: row.seen_at.toISOString(),
+      suppressedUntil: row.seen_at.toISOString(),
+      analysisId: "",
+      slabRights: "not_mentioned",
+      balconyBarbecue: "not_mentioned",
+      summary: "Imóvel de aluguel encontrado na coleta. A análise de laje e churrasqueira não se aplica ao aluguel.",
+      category: "none",
+      purpose: "rent",
+      ...(Number.isFinite(price) ? { rentAmount: price } : {}),
     };
   });
 }
@@ -709,7 +1021,7 @@ export async function answerAnalysisAmbiguity(input: {
   answer: AnalysisReviewAnswer;
 }) {
   const analysis = await query<{ result: PropertyFeatureAnalysis }>(
-    "SELECT result FROM property_analyses WHERE id = $1",
+    "SELECT result FROM tb_property_analyses WHERE id = $1",
     [input.analysisId],
   );
   const result = analysis.rows[0]?.result;
@@ -725,13 +1037,13 @@ export async function answerAnalysisAmbiguity(input: {
   const barbecueAnswer = input.feature === "balcony_barbecue" ? input.answer : null;
   await query(
     `
-      INSERT INTO property_analysis_reviews (
+      INSERT INTO tb_property_analysis_reviews (
         id, analysis_id, slab_rights_answer, balcony_barbecue_answer, answered_at
       )
       VALUES ($1, $2, $3, $4, now())
       ON CONFLICT (analysis_id) DO UPDATE SET
-        slab_rights_answer = COALESCE(EXCLUDED.slab_rights_answer, property_analysis_reviews.slab_rights_answer),
-        balcony_barbecue_answer = COALESCE(EXCLUDED.balcony_barbecue_answer, property_analysis_reviews.balcony_barbecue_answer),
+        slab_rights_answer = COALESCE(EXCLUDED.slab_rights_answer, tb_property_analysis_reviews.slab_rights_answer),
+        balcony_barbecue_answer = COALESCE(EXCLUDED.balcony_barbecue_answer, tb_property_analysis_reviews.balcony_barbecue_answer),
         answered_at = now()
     `,
     [randomUUID(), input.analysisId, slabAnswer, barbecueAnswer],
@@ -741,44 +1053,46 @@ export async function answerAnalysisAmbiguity(input: {
 export async function recomputeAiCooldownHistory() {
   await withTransaction(async (client) => {
     await client.query(`
-      UPDATE properties p
+      UPDATE tb_properties p
       SET
         last_researched_at = latest.analyzed_at,
         updated_at = now()
       FROM (
         SELECT property_id, max(analyzed_at) AS analyzed_at
-        FROM property_analyses
+        FROM tb_property_analyses
         GROUP BY property_id
       ) latest
       WHERE latest.property_id = p.id
     `);
     await client.query(`
-      UPDATE properties p
+      UPDATE tb_properties p
       SET last_researched_at = NULL, updated_at = now()
       WHERE NOT EXISTS (
-        SELECT 1 FROM property_analyses pa WHERE pa.property_id = p.id
+        SELECT 1 FROM tb_property_analyses pa WHERE pa.property_id = p.id
       )
     `);
     await client.query(`
-      UPDATE search_results sr
+      UPDATE tb_search_results sr
       SET
         eligible_for_research = NOT EXISTS (
           SELECT 1
-          FROM property_analyses pa
+          FROM tb_property_analyses pa
           WHERE pa.property_id = sr.property_id
+            AND pa.purpose = COALESCE(sr.listing_snapshot->>'purpose', 'sale')
             AND pa.analyzed_at <= sr.seen_at
             AND pa.valid_until > sr.seen_at
         ),
         suppressed_until = (
           SELECT max(pa.valid_until)
-          FROM property_analyses pa
+          FROM tb_property_analyses pa
           WHERE pa.property_id = sr.property_id
+            AND pa.purpose = COALESCE(sr.listing_snapshot->>'purpose', 'sale')
             AND pa.analyzed_at <= sr.seen_at
             AND pa.valid_until > sr.seen_at
         )
     `);
     await client.query(`
-      UPDATE search_runs run
+      UPDATE tb_search_runs run
       SET
         eligible_count = totals.eligible_count,
         suppressed_count = totals.suppressed_count
@@ -787,7 +1101,7 @@ export async function recomputeAiCooldownHistory() {
           search_run_id,
           count(*) FILTER (WHERE eligible_for_research)::integer AS eligible_count,
           count(*) FILTER (WHERE NOT eligible_for_research)::integer AS suppressed_count
-        FROM search_results
+        FROM tb_search_results
         GROUP BY search_run_id
       ) totals
       WHERE totals.search_run_id = run.id

@@ -44,11 +44,15 @@ export function parseListingCandidate(input: {
   candidate: LinkCandidate;
   source: string;
   searchUrl: string;
-  neighborhood: string;
+  neighborhood?: string;
+  neighborhoods?: string[];
   filters: SearchFilters;
   collectedAt: string;
 }): CollectedListing | null {
-  const { candidate, source, searchUrl, neighborhood, filters, collectedAt } = input;
+  const { candidate, source, searchUrl, filters, collectedAt } = input;
+  const acceptedNeighborhoods = input.neighborhoods?.length
+    ? input.neighborhoods
+    : [input.neighborhood ?? ""];
   const text = cleanText([candidate.text, candidate.ariaLabel].filter(Boolean).join(" "));
   let decodedHref = candidate.href;
   try {
@@ -57,9 +61,11 @@ export function parseListingCandidate(input: {
     // URLs parcialmente codificadas continuam utilizáveis como evidência.
   }
   const content = normalizeSpacedNumbers(`${decodedHref} ${text}`);
-  if (!content.toLocaleLowerCase("pt-BR").includes(neighborhood.toLocaleLowerCase("pt-BR"))) {
-    return null;
-  }
+  const contentKey = content.toLocaleLowerCase("pt-BR");
+  const neighborhood = acceptedNeighborhoods.find((item) =>
+    contentKey.includes(item.toLocaleLowerCase("pt-BR")),
+  );
+  if (!neighborhood) return null;
   const propertyType = propertyTypeFrom(content);
   const purposePricePattern =
     filters.purpose === "rent"

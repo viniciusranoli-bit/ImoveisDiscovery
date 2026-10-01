@@ -1,6 +1,8 @@
 # Agente de monitoramento de imóveis — Botafogo e metrô
 
 Este documento define as regras de negócio. O desenho técnico e o fluxo de dados estão em [ARCHITECTURE.md](./ARCHITECTURE.md).
+O roadmap de implementação fica no TODO.md na raiz do projeto.
+
 
 ## Missão
 

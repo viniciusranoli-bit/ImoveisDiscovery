@@ -8,13 +8,16 @@ import {
   type SearchFilters,
 } from "@/lib/listings";
 import type { SavedPropertyAnalysis } from "@/lib/property-analysis";
+import { southZoneNeighborhoods } from "@/lib/neighborhoods";
+import { rentHistoryBands } from "@/lib/rent-history";
+import { searchIntervalMs } from "@/lib/schedule";
 
 const currency = (value?: number) =>
   value === undefined
     ? "Não informado"
     : value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const neighborhoods = ["Botafogo", "Catete", "Copacabana", "Cosme Velho", "Flamengo", "Gávea", "Glória", "Humaitá", "Ipanema", "Jardim Botânico", "Lagoa", "Laranjeiras", "Leblon", "Leme", "São Conrado", "Urca"];
+const neighborhoods = [...southZoneNeighborhoods];
 const initialFilters: SearchFilters = {
   purpose: "sale",
   priceMax: 2_000_000,
@@ -39,6 +42,8 @@ type SuppressedHistoryItem = {
   slabRightsAnswer?: "yes" | "no" | "unknown";
   balconyBarbecueAnswer?: "yes" | "no" | "unknown";
   category: "both" | "slab_rights" | "balcony_barbecue" | "none" | "ambiguous";
+  purpose: "rent" | "sale";
+  rentAmount?: number;
 };
 const historyCategories = [
   { id: "both", label: "Laje e churrasqueira na varanda" },
@@ -48,16 +53,53 @@ const historyCategories = [
   { id: "none", label: "Nenhuma característica encontrada" },
 ] as const;
 type BatchSize = 5 | 10 | 15 | "all";
+type AppSection = "search" | "results" | "history-sale" | "history-rent" | "schedule";
 type SavedSearch = {
   id: string;
   title: string;
   neighborhood: string;
+  neighborhoods: string[];
   filters: SearchFilters;
+  savedAt: string;
+  analysisIntervalMinutes: 60 | 180 | 360 | 720 | 1440;
+  analysisBatchCount: BatchSize;
+  lastSearchedAt: string | null;
+  lastAnalyzedAt: string | null;
+  latestSearchRunId: string | null;
+  searchError: string | null;
+  analysisError: string | null;
+  analysisEnabled: boolean;
+};
+type SchedulerRun = {
+  id: string;
+  savedSearchId: string;
+  title: string;
+  jobKind: "search" | "analysis";
+  status: "completed" | "failed";
+  message: string | null;
+  finishedAt: string;
+};
+const sections = [
+  { id: "search", label: "Busca" },
+  { id: "results", label: "Resultados" },
+  { id: "history-sale", label: "Histórico de compra" },
+  { id: "history-rent", label: "Histórico de aluguel" },
+  { id: "schedule", label: "Agendamentos" },
+] as const;
+const dateTime = (value: string | null) =>
+  value ? new Date(value).toLocaleString("pt-BR") : "Ainda não executado";
+const scheduledMoment = (baseline: string | null, savedAt: string, intervalMs: number) => {
+  const at = new Date(Date.parse(baseline ?? savedAt) + intervalMs);
+  if (Number.isNaN(at.getTime())) return "horário ainda não calculado";
+  const formatted = at.toLocaleString("pt-BR");
+  return at.getTime() <= Date.now()
+    ? `na verificação seguinte do agendador (desde ${formatted})`
+    : formatted;
 };
 
 export default function Home() {
   const [city] = useState("Rio de Janeiro");
-  const [neighborhood, setNeighborhood] = useState("Botafogo");
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(["Botafogo"]);
   const [error, setError] = useState("");
   const [collecting, setCollecting] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
@@ -70,11 +112,15 @@ export default function Home() {
   const [batchSize, setBatchSize] = useState<BatchSize>(5);
   const [batchProgress, setBatchProgress] = useState<{ completed: number; failed: number; total: number }>();
   const batchLock = useRef(false);
-  const [suppressedHistory, setSuppressedHistory] = useState<SuppressedHistoryItem[]>([]);
+  const [saleHistory, setSaleHistory] = useState<SuppressedHistoryItem[]>([]);
+  const [rentHistory, setRentHistory] = useState<SuppressedHistoryItem[]>([]);
   const [answeringHistory, setAnsweringHistory] = useState<Record<string, boolean>>({});
   const [historyError, setHistoryError] = useState("");
+  const [section, setSection] = useState<AppSection>("search");
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [schedulerRuns, setSchedulerRuns] = useState<SchedulerRun[]>([]);
   const [saveStatus, setSaveStatus] = useState("");
+  const [editingSavedSearchId, setEditingSavedSearchId] = useState<string | null>(null);
 
   const visiblePortalListings = useMemo(
     () =>
@@ -85,15 +131,21 @@ export default function Home() {
       ),
     [filters, portalRun],
   );
+  const saleListings = useMemo(
+    () => visiblePortalListings.filter((listing) => listing.purpose !== "rent"),
+    [visiblePortalListings],
+  );
   const groupedHistory = useMemo(
     () =>
-      historyCategories
-        .map((category) => ({
-          ...category,
-          items: suppressedHistory.filter((item) => item.category === category.id),
-        }))
-        .filter((category) => category.items.length > 0),
-    [suppressedHistory],
+      section === "history-rent"
+        ? rentHistoryBands(rentHistory)
+        : historyCategories
+            .map((category) => ({
+              ...category,
+              items: saleHistory.filter((item) => item.category === category.id),
+            }))
+            .filter((category) => category.items.length > 0),
+    [rentHistory, saleHistory, section],
   );
 
   useEffect(() => {
@@ -111,24 +163,33 @@ export default function Home() {
         }
       })
       .catch(() => undefined);
-    fetch("/api/history?limit=50", { cache: "no-store" })
-      .then(async (response) => {
+    Promise.all(
+      (["sale", "rent"] as const).map(async (purpose) => {
+        const response = await fetch(`/api/history?purpose=${purpose}&limit=50`, { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
-        return data.items as SuppressedHistoryItem[];
-      })
-      .then((items) => {
-        if (active) setSuppressedHistory(items);
+        return [purpose, data.items as SuppressedHistoryItem[]] as const;
+      }),
+    )
+      .then((groups) => {
+        if (!active) return;
+        for (const [purpose, items] of groups) {
+          if (purpose === "sale") setSaleHistory(items);
+          else setRentHistory(items);
+        }
       })
       .catch(() => undefined);
-    fetch("/api/saved-searches", { cache: "no-store" })
+    fetch("/api/scheduler", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
-        return data.items as SavedSearch[];
+        return data as { searches: SavedSearch[]; runs: SchedulerRun[] };
       })
-      .then((items) => {
-        if (active) setSavedSearches(items);
+      .then((data) => {
+        if (active) {
+          setSavedSearches(data.searches);
+          setSchedulerRuns(data.runs);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -136,10 +197,12 @@ export default function Home() {
     };
   }, []);
 
-  async function refreshHistory() {
-    const response = await fetch("/api/history?limit=50", { cache: "no-store" });
+  async function refreshHistory(purpose: "sale" | "rent" = "sale") {
+    const response = await fetch(`/api/history?purpose=${purpose}&limit=50`, { cache: "no-store" });
     const data = await response.json();
-    if (response.ok) setSuppressedHistory(data.items);
+    if (!response.ok) return;
+    if (purpose === "sale") setSaleHistory(data.items);
+    else setRentHistory(data.items);
   }
 
   async function answerAmbiguity(
@@ -193,7 +256,7 @@ export default function Home() {
       const response = await fetch("/api/collect", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ city, neighborhood, filters }),
+        body: JSON.stringify({ city, neighborhoods: selectedNeighborhoods, filters }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -206,6 +269,7 @@ export default function Home() {
       const portalData = await portalResponse.json();
       if (!portalResponse.ok) throw new Error(portalData.error);
       setPortalRun(portalData);
+      setSection("results");
       await refreshHistory();
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Falha na consulta.";
@@ -219,11 +283,17 @@ export default function Home() {
 
   async function saveCurrentSearch() {
     setSaveStatus("");
+    const editing = editingSavedSearchId;
     try {
       const response = await fetch("/api/saved-searches", {
-        method: "POST",
+        method: editing ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ city, neighborhood, filters }),
+        body: JSON.stringify({
+          ...(editing ? { id: editing } : {}),
+          city,
+          neighborhoods: selectedNeighborhoods,
+          filters,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -231,7 +301,9 @@ export default function Home() {
         data.item as SavedSearch,
         ...previous.filter((item) => item.id !== data.item.id),
       ]);
-      setSaveStatus("Pesquisa salva.");
+      setEditingSavedSearchId(null);
+      setSaveStatus(editing ? "Agendamento atualizado." : "Pesquisa salva.");
+      if (editing) setSection("schedule");
     } catch (requestError) {
       setSaveStatus(
         requestError instanceof Error ? requestError.message : "Não foi possível salvar a pesquisa.",
@@ -239,10 +311,96 @@ export default function Home() {
     }
   }
 
+  function editSavedSearch(saved: SavedSearch) {
+    setSelectedNeighborhoods(
+      saved.neighborhoods?.length ? saved.neighborhoods : [saved.neighborhood],
+    );
+    setFilters({ ...initialFilters, ...saved.filters });
+    setEditingSavedSearchId(saved.id);
+    setSection("search");
+    setSaveStatus(`Editando “${saved.title}”. Salve para atualizar este agendamento.`);
+  }
+
+  async function deleteSavedSearch(saved: SavedSearch) {
+    if (!window.confirm(`Apagar a busca automática “${saved.title}” e a análise ligada a ela?`)) return;
+    setSaveStatus("");
+    try {
+      const response = await fetch(`/api/saved-searches?id=${encodeURIComponent(saved.id)}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setSavedSearches((previous) => previous.filter((item) => item.id !== saved.id));
+      setSchedulerRuns((previous) => previous.filter((run) => run.savedSearchId !== saved.id));
+      if (editingSavedSearchId === saved.id) setEditingSavedSearchId(null);
+      setSaveStatus("Agendamento apagado.");
+    } catch (requestError) {
+      setSaveStatus(
+        requestError instanceof Error ? requestError.message : "Não foi possível apagar o agendamento.",
+      );
+    }
+  }
+
+  async function deleteSchedulerExecution(run: SchedulerRun) {
+    const kind = run.jobKind === "search" ? "busca" : "análise";
+    if (!window.confirm(`Apagar a execução de ${kind} “${run.title}”?`)) return;
+    setSaveStatus("");
+    try {
+      const response = await fetch(`/api/scheduler?id=${encodeURIComponent(run.id)}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setSchedulerRuns(data.runs);
+      setSaveStatus("Execução apagada.");
+    } catch (requestError) {
+      setSaveStatus(
+        requestError instanceof Error ? requestError.message : "Não foi possível apagar a execução.",
+      );
+    }
+  }
+
+  function editSchedulerExecution(run: SchedulerRun) {
+    const saved = savedSearches.find((item) => item.id === run.savedSearchId);
+    if (!saved) {
+      setSaveStatus("A pesquisa desta execução não está mais salva.");
+      return;
+    }
+    editSavedSearch(saved);
+  }
+
+  async function updateSchedule(
+    saved: SavedSearch,
+    patch: Partial<Pick<SavedSearch, "analysisIntervalMinutes" | "analysisBatchCount" | "analysisEnabled">>,
+  ) {
+    setSaveStatus("");
+    try {
+      const response = await fetch("/api/scheduler", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: saved.id,
+          analysisIntervalMinutes: patch.analysisIntervalMinutes ?? saved.analysisIntervalMinutes,
+          analysisBatchCount: patch.analysisBatchCount ?? saved.analysisBatchCount,
+          analysisEnabled: patch.analysisEnabled ?? saved.analysisEnabled,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setSavedSearches(data.searches);
+      setSchedulerRuns(data.runs);
+      setSaveStatus("Agendamento atualizado.");
+    } catch (requestError) {
+      setSaveStatus(
+        requestError instanceof Error ? requestError.message : "Não foi possível atualizar o agendamento.",
+      );
+    }
+  }
+
   function loadSavedSearch(id: string) {
     const saved = savedSearches.find((item) => item.id === id);
     if (!saved) return;
-    setNeighborhood(saved.neighborhood);
+    setSelectedNeighborhoods(
+      saved.neighborhoods?.length ? saved.neighborhoods : [saved.neighborhood],
+    );
     setFilters({ ...initialFilters, ...saved.filters });
     setSaveStatus(`Filtros de “${saved.title}” carregados.`);
   }
@@ -284,11 +442,10 @@ export default function Home() {
 
   async function analyzeBatch() {
     if (!portalRun || batchLock.current) return;
+    const targets = saleListings.slice(0, batchSize === "all" ? saleListings.length : batchSize);
+    if (!targets.length) return;
     batchLock.current = true;
-    const total = Math.min(
-      visiblePortalListings.length,
-      batchSize === "all" ? visiblePortalListings.length : batchSize,
-    );
+    const total = targets.length;
     setBatchProgress({ completed: 0, failed: 0, total });
     setPortalError("");
     try {
@@ -340,22 +497,63 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <div className="app-shell">
+      <aside className="side-nav">
+        <p className="eyebrow">Radar</p>
+        <strong>Imóveis</strong>
+        <nav aria-label="Seções">
+          {sections.map((item) => (
+            <button
+              type="button"
+              className={section === item.id ? "active" : ""}
+              onClick={() => setSection(item.id)}
+              key={item.id}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <small>Busca automática a cada hora para cada filtro salvo.</small>
+      </aside>
+      <main>
+      {section === "search" && (
       <header className="hero">
         <p className="eyebrow">Rio de Janeiro · aluguel e compra</p>
         <h1>Radar de imóveis</h1>
-        <p className="subtitle">Descobre portais pela Serper, coleta os anúncios com Playwright e reaplica filtros verificáveis antes de exibir os resultados.</p>
+        <p className="subtitle">Descobre portais, coleta os anúncios e reaplica filtros verificáveis antes de exibir os resultados.</p>
         <form onSubmit={collectSearch} className="filter-form">
           <label>
             Cidade
             <select value={city} disabled><option>Rio de Janeiro</option></select>
           </label>
-          <label>
-            Bairro da Zona Sul
-            <select value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)}>
-              {neighborhoods.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
+          <fieldset className="neighborhood-combo">
+            <legend>Bairros da Zona Sul</legend>
+            <details>
+              <summary>
+                {selectedNeighborhoods.length
+                  ? selectedNeighborhoods.join(", ")
+                  : "Selecione um ou mais bairros"}
+              </summary>
+              <div>
+                {neighborhoods.map((item) => (
+                  <label key={item}>
+                    <input
+                      type="checkbox"
+                      checked={selectedNeighborhoods.includes(item)}
+                      onChange={() =>
+                        setSelectedNeighborhoods((current) =>
+                          current.includes(item)
+                            ? current.filter((neighborhood) => neighborhood !== item)
+                            : [...current, item],
+                        )
+                      }
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+            </details>
+          </fieldset>
           <label>
             Finalidade
             <select
@@ -427,11 +625,11 @@ export default function Home() {
               Cobertura
             </label>
           </fieldset>
-          <button className="collect-button" disabled={collecting || filters.propertyTypes.length === 0}>
+          <button className="collect-button" disabled={collecting || filters.propertyTypes.length === 0 || selectedNeighborhoods.length === 0}>
             {collectingPortals
               ? "Coletando nos portais…"
               : collecting
-                ? "Descobrindo sites…"
+                ? "Descobrindo portais…"
                 : "Buscar em todos os sites"}
           </button>
         </form>
@@ -450,14 +648,28 @@ export default function Home() {
               ))}
             </select>
           </label>
-          <button type="button" onClick={saveCurrentSearch}>Salvar pesquisa</button>
+          <button type="button" onClick={saveCurrentSearch}>
+            {editingSavedSearchId ? "Atualizar agendamento" : "Salvar pesquisa"}
+          </button>
+          {editingSavedSearchId && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setEditingSavedSearchId(null);
+                setSaveStatus("Edição cancelada.");
+              }}
+            >
+              Cancelar edição
+            </button>
+          )}
           {saveStatus && <p role="status">{saveStatus}</p>}
         </div>
         {collecting && (
           <section className="search-progress" aria-live="polite">
             <div className="progress-copy">
               <strong>
-                {collectingPortals ? "Analisando os portais encontrados" : "Descobrindo fontes na Serper"}
+                {collectingPortals ? "Analisando os portais encontrados" : "Descobrindo portais"}
               </strong>
               <span>{collectingPortals ? "Etapa 2 de 2" : "Etapa 1 de 2"}</span>
             </div>
@@ -479,8 +691,10 @@ export default function Home() {
         )}
         <p className="hint">Preço, quartos, vagas e tipo são filtrados na descoberta e novamente após a normalização. Dados ausentes não são presumidos.</p>
       </header>
+      )}
 
-      {error && <p className="error" role="alert">{error}</p>}
+      {section === "search" && error && <p className="error" role="alert">{error}</p>}
+      {section === "results" && (
       <section className="playwright-panel" aria-labelledby="playwright-title">
         <div className="section-heading playwright-heading">
           <div>
@@ -547,6 +761,7 @@ export default function Home() {
 
             {visiblePortalListings.length > 0 ? (
               <>
+                {saleListings.length > 0 && (
                 <div className="batch-analysis">
                   <div>
                     <strong>Análise da IA em lote</strong>
@@ -562,7 +777,7 @@ export default function Home() {
                       <option value={5}>5</option>
                       <option value={10}>10</option>
                       <option value={15}>15</option>
-                      <option value="all">Todos ({visiblePortalListings.length})</option>
+                      <option value="all">Todos ({saleListings.length})</option>
                     </select>
                   </label>
                   <button type="button" disabled={Boolean(batchProgress)} onClick={analyzeBatch}>
@@ -578,6 +793,7 @@ export default function Home() {
                     </p>
                   )}
                 </div>
+                )}
                 <div className="playwright-listings">
                 {visiblePortalListings.map((listing) => {
                   const analysis = propertyAnalyses[listing.id];
@@ -585,11 +801,15 @@ export default function Home() {
                     <article key={listing.id}>
                       <span className="source-label">{listing.sources.join(" + ")}</span>
                       <h3>{listing.title}</h3>
+                      {listing.purpose === "rent" && <span className="source-label">Aluguel</span>}
                       <strong className="captured-price">{currency(listing.price)}</strong>
                       <p>
                         {listing.bedrooms ?? "—"} quartos · {listing.parkingSpaces ?? "—"} vagas · {listing.areaM2 ?? "—"} m²
                       </p>
                       <p>{listing.neighborhood} · {listing.propertyType === "penthouse" ? "Cobertura" : "Apartamento"}</p>
+                      {listing.purpose === "rent" ? (
+                        <p className="rent-note">Aluguel não passa pela análise de laje e churrasqueira.</p>
+                      ) : (
                       <button
                         type="button"
                         className="ai-analysis-button"
@@ -601,7 +821,8 @@ export default function Home() {
                           : analysis
                             ? "Análise concluída"
                             : "Analisar laje e churrasqueira com IA"}
-                      </button>
+                        </button>
+                      )}
                       {propertyAnalysisErrors[listing.id] && (
                         <p className="inline-error" role="alert">{propertyAnalysisErrors[listing.id]}</p>
                       )}
@@ -668,19 +889,23 @@ export default function Home() {
           </section>
         )}
       </section>
+      )}
+      {(section === "history-sale" || section === "history-rent") && (
       <section className="semester-history" aria-labelledby="semester-history-title">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Controle de repetição</p>
-            <h2 id="semester-history-title">Histórico semestral</h2>
+            <h2 id="semester-history-title">{section === "history-rent" ? "Histórico de aluguel" : "Histórico de compra"}</h2>
             <p className="list-description">
-              Imóveis analisados pela IA ficam registrados por seis meses, separados por imobiliária.
+              {section === "history-rent"
+                ? "Os imóveis de aluguel ficam separados entre até R$ 12.000 e acima desse valor. O valor mostrado é o aluguel encontrado no anúncio."
+                : "Imóveis de compra analisados pela IA ficam registrados por seis meses, separados por imobiliária."}
             </p>
           </div>
-          <span className="count">{suppressedHistory.length}</span>
+          <span className="count">{(section === "history-rent" ? rentHistory : saleHistory).length}</span>
         </div>
         {historyError && <p className="error" role="alert">{historyError}</p>}
-        {suppressedHistory.length ? (
+        {(section === "history-rent" ? rentHistory : saleHistory).length ? (
           <div className="history-groups">
             {groupedHistory.map((group) => (
               <section className="history-group" key={group.id}>
@@ -697,17 +922,23 @@ export default function Home() {
                         <p>{item.summary}</p>
                       </div>
                       <dl>
+                        {section === "history-rent" && (
+                          <div>
+                            <dt>Aluguel</dt>
+                            <dd>{currency(item.rentAmount)}</dd>
+                          </div>
+                        )}
                         <div>
                           <dt>Analisado em</dt>
                           <dd>{new Date(item.seenAt).toLocaleDateString("pt-BR")}</dd>
                         </div>
                         <div>
-                          <dt>Nova pesquisa após</dt>
-                          <dd>{new Date(item.suppressedUntil).toLocaleDateString("pt-BR")}</dd>
+                          <dt>{section === "history-rent" ? "Repetição" : "Nova pesquisa após"}</dt>
+                          <dd>{section === "history-rent" ? "Sem bloqueio semestral" : new Date(item.suppressedUntil).toLocaleDateString("pt-BR")}</dd>
                         </div>
                       </dl>
                       <div className="history-actions">
-                        {item.slabRights === "ambiguous" && (
+                        {section === "history-sale" && item.analysisId && item.slabRights === "ambiguous" && (
                           <fieldset className="ambiguity-question">
                             <legend>O imóvel tem direito à laje?</legend>
                             {(["yes", "no", "unknown"] as const).map((answer) => (
@@ -723,7 +954,7 @@ export default function Home() {
                             ))}
                           </fieldset>
                         )}
-                        {item.balconyBarbecue === "ambiguous" && (
+                        {section === "history-sale" && item.analysisId && item.balconyBarbecue === "ambiguous" && (
                           <fieldset className="ambiguity-question">
                             <legend>Há churrasqueira na varanda?</legend>
                             {(["yes", "no", "unknown"] as const).map((answer) => (
@@ -748,9 +979,134 @@ export default function Home() {
             ))}
           </div>
         ) : (
-          <p className="history-empty">Nenhum imóvel foi analisado pela IA nos últimos seis meses.</p>
+          <p className="history-empty">{section === "history-rent" ? "Nenhum imóvel de aluguel foi coletado." : "Nenhum imóvel de compra foi analisado pela IA nos últimos seis meses."}</p>
         )}
       </section>
-    </main>
+      )}
+      {section === "schedule" && (
+        <section className="schedule-panel" aria-labelledby="schedule-title">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Automação</p>
+              <h2 id="schedule-title">Agendamentos</h2>
+              <p className="list-description">Cada pesquisa salva tem a busca na API e, na compra, a chamada da IA. As duas podem ser editadas ou apagadas.</p>
+            </div>
+          </div>
+          {saveStatus && <p role="status">{saveStatus}</p>}
+          <h3>Busca na API</h3>
+          {savedSearches.length ? (
+            <div className="schedule-list">
+              {savedSearches.map((saved) => (
+                <article key={`search-${saved.id}`}>
+                  <div>
+                    <h3>Busca · {saved.title}</h3>
+                    <p>A cada 1 hora · última em {dateTime(saved.lastSearchedAt)}</p>
+                    <p>Próxima busca: {scheduledMoment(saved.lastSearchedAt, saved.savedAt, searchIntervalMs)}</p>
+                    {saved.searchError && <small>{saved.searchError}</small>}
+                  </div>
+                  <div className="schedule-actions">
+                    <button type="button" className="secondary-button" onClick={() => editSavedSearch(saved)}>Editar</button>
+                    {saved.filters.purpose !== "rent" && !saved.analysisEnabled && (
+                      <button type="button" className="secondary-button" onClick={() => updateSchedule(saved, { analysisEnabled: true })}>
+                        Agendar análise
+                      </button>
+                    )}
+                    <button type="button" className="danger-button" onClick={() => deleteSavedSearch(saved)}>Apagar</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="history-empty">Salve uma pesquisa para ativar a busca de hora em hora.</p>
+          )}
+          <h3>Chamada da IA</h3>
+          {savedSearches.some((saved) => saved.filters.purpose !== "rent" && saved.analysisEnabled) ? (
+            <div className="schedule-list">
+              {savedSearches.filter((saved) => saved.filters.purpose !== "rent" && saved.analysisEnabled).map((saved) => (
+                <article key={`analysis-${saved.id}`}>
+                  <div>
+                    <h3>Análise · {saved.title}</h3>
+                    <p>
+                      Próxima análise: {saved.latestSearchRunId
+                        ? scheduledMoment(saved.lastAnalyzedAt, saved.savedAt, saved.analysisIntervalMinutes * 60 * 1000)
+                        : "depois da primeira busca concluída"}
+                      {" "}· última em {dateTime(saved.lastAnalyzedAt)}
+                    </p>
+                    {saved.analysisError && <small>{saved.analysisError}</small>}
+                  </div>
+                  <label>
+                    Intervalo
+                    <select
+                      value={saved.analysisIntervalMinutes}
+                      onChange={(event) =>
+                        updateSchedule(saved, {
+                          analysisIntervalMinutes: Number(event.target.value) as SavedSearch["analysisIntervalMinutes"],
+                        })
+                      }
+                    >
+                      <option value={60}>A cada 1 hora</option>
+                      <option value={180}>A cada 3 horas</option>
+                      <option value={360}>A cada 6 horas</option>
+                      <option value={720}>A cada 12 horas</option>
+                      <option value={1440}>A cada 24 horas</option>
+                    </select>
+                  </label>
+                  <label>
+                    Quantidade
+                    <select
+                      value={saved.analysisBatchCount}
+                      onChange={(event) =>
+                        updateSchedule(saved, {
+                          analysisBatchCount: event.target.value === "all" ? "all" : Number(event.target.value) as BatchSize,
+                        })
+                      }
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={15}>15</option>
+                      <option value="all">Todos</option>
+                    </select>
+                  </label>
+                  <div className="schedule-actions">
+                    <button type="button" className="secondary-button" onClick={() => editSavedSearch(saved)}>Editar</button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => {
+                        if (window.confirm(`Parar a análise automática de “${saved.title}”? A busca de hora em hora continua.`)) {
+                          void updateSchedule(saved, { analysisEnabled: false });
+                        }
+                      }}
+                    >
+                      Apagar
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="history-empty">Nenhuma análise automática está ligada. Aluguel não usa a IA de laje e churrasqueira.</p>
+          )}
+          {schedulerRuns.length > 0 && (
+            <div className="scheduler-runs">
+              <h3>Execuções</h3>
+              {schedulerRuns.map((run) => (
+                <div key={run.id}>
+                  <p>
+                    <b>{run.jobKind === "search" ? "Busca" : "Análise"} · {run.title}</b>
+                    {" "}{run.status === "completed" ? "concluída" : "com falha"} em {dateTime(run.finishedAt)}. {run.message}
+                  </p>
+                  <div className="schedule-actions">
+                    <button type="button" className="secondary-button" onClick={() => editSchedulerExecution(run)}>Editar</button>
+                    <button type="button" className="danger-button" onClick={() => deleteSchedulerExecution(run)}>Apagar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+      </main>
+    </div>
   );
 }

@@ -11,7 +11,8 @@ import { parseListingCandidate, type LinkCandidate } from "./parser";
 
 type CollectPortalsInput = {
   urls: string[];
-  neighborhood: string;
+  neighborhood?: string;
+  neighborhoods?: string[];
   filters: SearchFilters;
 };
 
@@ -20,14 +21,26 @@ const blockPattern =
 
 async function launchBrowser() {
   const headless = process.env.PLAYWRIGHT_HEADLESS === "true";
-  const requestedChannel = process.env.PLAYWRIGHT_CHANNEL;
-  const channels = requestedChannel ? [requestedChannel] : ["chrome", "msedge"];
+  const requestedChannel = process.env.PLAYWRIGHT_CHANNEL?.trim();
+  const launchArgs =
+    process.env.PLAYWRIGHT_NO_SANDBOX === "true"
+      ? ["--no-sandbox", "--disable-dev-shm-usage"]
+      : undefined;
   const errors: string[] = [];
 
+  if (requestedChannel === "chromium" || requestedChannel === "playwright-chromium") {
+    return {
+      browser: await chromium.launch({ headless, args: launchArgs }),
+      channel: "playwright-chromium",
+      headless,
+    };
+  }
+
+  const channels = requestedChannel ? [requestedChannel] : ["chrome", "msedge"];
   for (const channel of channels) {
     try {
       return {
-        browser: await chromium.launch({ channel, headless }),
+        browser: await chromium.launch({ channel, headless, args: launchArgs }),
         channel,
         headless,
       };
@@ -38,7 +51,7 @@ async function launchBrowser() {
 
   try {
     return {
-      browser: await chromium.launch({ headless }),
+      browser: await chromium.launch({ headless, args: launchArgs }),
       channel: "playwright-chromium",
       headless,
     };
@@ -101,7 +114,7 @@ async function visibleCandidates(page: Page, selectors: string[]) {
 async function collectSource(
   browser: Browser,
   inputUrl: string,
-  neighborhood: string,
+  neighborhoods: string[],
   filters: SearchFilters,
 ) {
   const startedAt = Date.now();
@@ -154,7 +167,7 @@ async function collectSource(
           candidate,
           source,
           searchUrl,
-          neighborhood,
+          neighborhoods,
           filters,
           collectedAt,
         }),
@@ -195,6 +208,11 @@ async function collectSource(
 }
 
 export async function collectPortals(input: CollectPortalsInput) {
+  const neighborhoods = input.neighborhoods?.length
+    ? input.neighborhoods
+    : input.neighborhood
+      ? [input.neighborhood]
+      : [];
   const uniqueUrls = [
     ...new Map(
       input.urls
@@ -217,7 +235,7 @@ export async function collectPortals(input: CollectPortalsInput) {
         results[index] = await collectSource(
           browser,
           uniqueUrls[index],
-          input.neighborhood,
+          neighborhoods,
           input.filters,
         );
       }

@@ -1,0 +1,50 @@
+# Sobe a aplicação e um PostgreSQL próprio.
+# As senhas e chaves ficam em backend/.env, que não entra na imagem.
+#
+#   npm run docker:up
+#   npm run docker:down
+#
+# O banco criado aqui é novo. DB_HOST do arquivo é trocado pelo serviço db.
+# Para apontar a um Postgres que já existe na máquina, troque DB_HOST para
+# host.docker.internal e remova o serviço db.
+
+name: aluguel-discovery
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:?Defina DATABASE_NAME em backend/.env}
+      POSTGRES_USER: ${DB_USER:?Defina DB_USER em backend/.env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD em backend/.env}
+    volumes:
+      - aluguel_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSL: "false"
+      PLAYWRIGHT_HEADLESS: "true"
+      PLAYWRIGHT_CHANNEL: chromium
+      PLAYWRIGHT_NO_SANDBOX: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    shm_size: 1gb
+    init: true
+    restart: unless-stopped
+
+volumes:
+  aluguel_pg:

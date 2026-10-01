@@ -1,24 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { normalizeSearchFilters, type SearchFilters } from "@/lib/listings";
+import { normalizeNeighborhoods } from "@/lib/neighborhoods";
 import { collectSerperResults } from "@/lib/search";
 import { saveSerperCollection } from "@/lib/storage";
-
-const southZoneNeighborhoods = new Set([
-  "Botafogo", "Catete", "Copacabana", "Cosme Velho", "Flamengo", "Gávea",
-  "Glória", "Humaitá", "Ipanema", "Jardim Botânico", "Lagoa", "Laranjeiras",
-  "Leblon", "Leme", "São Conrado", "Urca",
-]);
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       city?: string;
       neighborhood?: string;
+      neighborhoods?: string[];
       filters?: Partial<SearchFilters>;
     };
-    if (body.city !== "Rio de Janeiro" || !body.neighborhood || !southZoneNeighborhoods.has(body.neighborhood)) {
-      return NextResponse.json({ error: "Selecione um bairro válido da Zona Sul do Rio de Janeiro." }, { status: 400 });
+    const neighborhoods = normalizeNeighborhoods(body.neighborhoods ?? body.neighborhood);
+    if (body.city !== "Rio de Janeiro" || !neighborhoods.length) {
+      return NextResponse.json({ error: "Selecione ao menos um bairro válido da Zona Sul do Rio de Janeiro." }, { status: 400 });
     }
     const filters = normalizeSearchFilters(body.filters ?? {});
     if (
@@ -33,14 +30,14 @@ export async function POST(request: Request) {
     }
     const { query, results, rawResponse } = await collectSerperResults(
       body.city,
-      body.neighborhood,
+      neighborhoods,
       filters,
     );
     const collection = {
       id: randomUUID(),
       collectedAt: new Date().toISOString(),
       city: body.city,
-      neighborhood: body.neighborhood,
+      neighborhood: neighborhoods.join(", "),
       query,
       filters,
       results,
@@ -50,7 +47,7 @@ export async function POST(request: Request) {
     return NextResponse.json(collection);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Não foi possível consultar a Serper." },
+      { error: error instanceof Error ? error.message : "Não foi possível consultar os portais." },
       { status: 500 },
     );
   }

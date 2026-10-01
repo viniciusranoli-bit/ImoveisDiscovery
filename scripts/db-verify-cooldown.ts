@@ -132,13 +132,13 @@ async function main() {
     );
   } finally {
     await query(
-      "DELETE FROM search_runs WHERE query = 'teste transacional de cooldown'",
+      "DELETE FROM tb_search_runs WHERE query = 'teste transacional de cooldown'",
     ).catch(() => undefined);
     await query(
       `
-        DELETE FROM properties
+        DELETE FROM tb_properties
         WHERE id IN (
-          SELECT property_id FROM property_listings WHERE source = $1
+          SELECT property_id FROM tb_property_listings WHERE source = $1
         )
       `,
       [source],

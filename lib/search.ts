@@ -32,7 +32,7 @@ async function searchWeb(query: string) {
     throw new Error("Configure SEARCH_API_KEY no arquivo backend/.env para pesquisar anúncios ao vivo.");
   }
 
-  const response = await externalFetch("Serper", endpoint, {
+  const response = await externalFetch("Busca", endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", "X-API-KEY": key },
     body: JSON.stringify({ q: query, num: 100 }),
@@ -51,7 +51,7 @@ async function searchWeb(query: string) {
 
 export async function collectSerperResults(
   city: "Rio de Janeiro",
-  neighborhood: string,
+  neighborhood: string | string[],
   filters: SearchFilters,
 ) {
   const purpose = filters.purpose === "sale" ? "comprar" : "alugar";
@@ -64,7 +64,8 @@ export async function collectSerperResults(
   ]
     .filter(Boolean)
     .join(" ");
-  const query = `${types} para ${purpose} ${neighborhood} ${city} ${filters.bedroomsMin}+ quartos ${filters.parkingMin}+ vagas ${price}`.trim();
+  const places = (Array.isArray(neighborhood) ? neighborhood : [neighborhood]).join(" ou ");
+  const query = `${types} para ${purpose} ${places} ${city} ${filters.bedroomsMin}+ quartos ${filters.parkingMin}+ vagas ${price}`.trim();
   const { results, rawResponse } = await searchWeb(query);
   return { query, results, rawResponse };
 }

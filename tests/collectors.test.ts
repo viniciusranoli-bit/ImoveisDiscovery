@@ -116,6 +116,20 @@ test("normaliza preço com espaços e elimina resultado de outro bairro", () => 
     collectedAt: "2026-09-30T00:00:00.000Z",
   });
   assert.equal(tijuca, null);
+
+  const copacabana = parseListingCandidate({
+    candidate: {
+      href: "https://example.com/imovel/apartamento-copacabana-789",
+      text: "Apartamento em Copacabana, 2 quartos, 1 vaga. Aluguel: R$ 7.500.",
+    },
+    source: "example.com",
+    searchUrl: "https://example.com/busca/zona-sul",
+    neighborhoods: ["Botafogo", "Copacabana"],
+    filters: rentFilters,
+    collectedAt: "2026-09-30T00:00:00.000Z",
+  });
+  assert.equal(copacabana?.neighborhood, "Copacabana");
+  assert.equal(copacabana?.purpose, "rent");
 });
 
 test("distingue aluguel do total conforme a ordem exibida pelo portal", () => {
