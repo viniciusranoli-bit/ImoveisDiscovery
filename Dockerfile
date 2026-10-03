@@ -18,7 +18,7 @@ RUN printf '%s\n' \
   'set -eu' \
   'attempts=0' \
   'until npx tsx scripts/db-migrate.ts; do' \
-  '  attempts=$$((attempts + 1))' \
+  '  attempts=$((attempts + 1))' \
   '  if [ "$$attempts" -ge 30 ]; then' \
   '    echo "A migração do banco não concluiu."' \
   '    exit 1' \

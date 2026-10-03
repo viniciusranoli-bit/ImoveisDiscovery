@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { extractPublishedAddress } from "./address";
 import type {
   CollectedListing,
   PropertyType,
+  LocationStatus,
   SearchFilters,
 } from "../listings";
 
@@ -40,6 +42,18 @@ function normalizeSpacedNumbers(value: string) {
   return normalized;
 }
 
+const nonRioLocations = /\b(porto alegre|s[aã]o paulo|curitiba|belo horizonte|bras[ií]lia|salvador|recife|campinas|florian[oó]polis|tristeza)\b|\b(?:RS|SP|PR|MG|DF|BA|PE|SC)\b/i;
+
+export function classifyLocationText(text: string, neighborhood?: string): LocationStatus {
+  const content = text.toLocaleLowerCase("pt-BR");
+  if (nonRioLocations.test(text)) return "excluded";
+  if (/\brio de janeiro\b|\b estado do rio\b|\b rj\b/i.test(text)) return "confirmed";
+  if (neighborhood && content.includes(neighborhood.toLocaleLowerCase("pt-BR"))) {
+    return "unknown";
+  }
+  return "unknown";
+}
+
 export function parseListingCandidate(input: {
   candidate: LinkCandidate;
   source: string;
@@ -62,10 +76,15 @@ export function parseListingCandidate(input: {
   }
   const content = normalizeSpacedNumbers(`${decodedHref} ${text}`);
   const contentKey = content.toLocaleLowerCase("pt-BR");
-  const neighborhood = acceptedNeighborhoods.find((item) =>
+  const detectedNeighborhood = acceptedNeighborhoods.find((item) =>
     contentKey.includes(item.toLocaleLowerCase("pt-BR")),
   );
-  if (!neighborhood) return null;
+  const preliminaryLocationStatus = classifyLocationText(
+    content,
+    detectedNeighborhood ?? acceptedNeighborhoods[0],
+  );
+  if (!detectedNeighborhood && preliminaryLocationStatus !== "excluded") return null;
+  const neighborhood = detectedNeighborhood ?? acceptedNeighborhoods[0] ?? "Não informado";
   const propertyType = propertyTypeFrom(content);
   const purposePricePattern =
     filters.purpose === "rent"
@@ -124,6 +143,8 @@ export function parseListingCandidate(input: {
   ]
     .filter(Boolean)
     .join(" · ");
+  const location = extractPublishedAddress(content);
+  const locationStatus = preliminaryLocationStatus;
 
   return {
     id: `${source}:${externalId}`,
@@ -134,6 +155,8 @@ export function parseListingCandidate(input: {
     ...(bedrooms !== undefined ? { bedrooms } : {}),
     ...(parkingSpaces !== undefined ? { parkingSpaces } : {}),
     ...(areaM2 !== undefined ? { areaM2 } : {}),
+    ...(location ? { location } : {}),
+    locationStatus,
     neighborhood,
     link: candidate.href,
     source,

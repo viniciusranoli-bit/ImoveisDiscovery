@@ -3,6 +3,7 @@ import path from "node:path";
 import type { MultiPortalRun, SearchRun, SerperCollection } from "./listings";
 import {
   persistMultiPortalRun,
+  readAccumulatedPortalRun,
   readDiscovery,
   readLatestPortalRun,
   saveDiscovery,
@@ -55,8 +56,8 @@ export async function saveSearch(run: SearchRun) {
   }
 }
 
-export async function saveSerperCollection(collection: SerperCollection) {
-  await saveDiscovery(collection);
+export async function saveSerperCollection(collection: SerperCollection, userId?: string) {
+  await saveDiscovery(collection, userId);
 }
 
 export async function readSerperCollection(id: string) {
@@ -67,8 +68,25 @@ export async function saveMultiPortalRun(run: MultiPortalRun) {
   return persistMultiPortalRun(run);
 }
 
-export async function readLatestMultiPortalRun() {
-  return readLatestPortalRun();
+export async function readLatestMultiPortalRun(userId?: string) {
+  return readLatestPortalRun(userId);
+}
+
+export async function readMultiPortalRunView(params: {
+  savedSearchId?: string;
+  scope?: "manual" | "latest";
+  userId?: string;
+}) {
+  if (params.savedSearchId) {
+    return readAccumulatedPortalRun({
+      savedSearchId: params.savedSearchId,
+      userId: params.userId,
+    });
+  }
+  if (params.scope === "manual") {
+    return readAccumulatedPortalRun({ manualOnly: true, userId: params.userId });
+  }
+  return readLatestPortalRun(params.userId);
 }
 
 const cell = (value: string) => value.replaceAll("|", "\\|").replaceAll("\n", " ").trim();

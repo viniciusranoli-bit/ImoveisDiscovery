@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendFeedback } from "@/lib/storage";
+import { optionalUser } from "@/lib/auth/request-user";
+import { recordDecisionEvent } from "@/lib/decision-events";
+import { resolvePropertyIdByLink } from "@/lib/db/repository";
 
 const feedbackSchema = z.object({
   link: z.url(),
@@ -38,5 +41,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Feedback inválido." }, { status: 400 });
   }
   await appendFeedback({ ...parsed.data, learning: learning[parsed.data.action] });
+  const user = await optionalUser();
+  await recordDecisionEvent({
+    propertyId: await resolvePropertyIdByLink(parsed.data.link),
+    userId: user?.id,
+    eventType: `feedback_${parsed.data.action.toLowerCase().replaceAll(" ", "_")}`,
+    source: "interface",
+    reason: parsed.data.note ?? learning[parsed.data.action],
+    evidence: [parsed.data.link],
+  });
   return NextResponse.json({ ok: true });
 }

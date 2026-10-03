@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { analyzePropertyFromRun } from "@/lib/property-analysis-service";
+import { requireUser } from "@/lib/auth/request-user";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUser();
     const body = (await request.json()) as { runId?: string; listingId?: string };
     if (!body.runId || !body.listingId) {
       return NextResponse.json(
@@ -14,7 +16,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(await analyzePropertyFromRun(body.runId, body.listingId));
+    return NextResponse.json(await analyzePropertyFromRun(body.runId, body.listingId, user.id));
   } catch (error) {
     return NextResponse.json(
       {

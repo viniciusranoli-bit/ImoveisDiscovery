@@ -18,3 +18,14 @@ test("separa o histórico de aluguel no teto de 12 mil", () => {
     ],
   );
 });
+
+test("classificador de aluguel exibe somente a faixa selecionada", () => {
+  const groups = rentHistoryBands(
+    [
+      { id: "within", rentAmount: 12_000 },
+      { id: "above", rentAmount: 12_001 },
+    ],
+    "above",
+  );
+  assert.deepEqual(groups.map((group) => group.items.map((item) => item.id)), [["above"]]);
+});

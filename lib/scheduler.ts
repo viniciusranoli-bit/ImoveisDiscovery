@@ -1,5 +1,6 @@
 import { getPool } from "./db/client";
 import {
+  linkSearchRunToSavedSearch,
   markScheduledAnalysis,
   markScheduledSearch,
   readRecentSchedulerRuns,
@@ -22,6 +23,7 @@ async function runSearch(saved: SavedSearch) {
   const startedAt = new Date().toISOString();
   try {
     const run = await runSavedSearchCollection(saved);
+    await linkSearchRunToSavedSearch(run.id, saved.id);
     const message = `${run.listings.length} imóveis liberados de ${run.totalCollected ?? run.listings.length} coletados.`;
     await markScheduledSearch(saved.id, { searchedAt: startedAt, searchRunId: run.id });
     await recordSchedulerRun({
@@ -51,7 +53,7 @@ async function runSearch(saved: SavedSearch) {
 async function runAnalysis(saved: SavedSearch, runId: string) {
   const startedAt = new Date().toISOString();
   try {
-    const result = await analyzePropertyBatchFromRun(runId, saved.analysisBatchCount);
+    const result = await analyzePropertyBatchFromRun(runId, saved.analysisBatchCount, saved.userId);
     const message = `${result.analyzedListingIds.length} análises concluídas; ${result.failures.length} falhas.`;
     await markScheduledAnalysis(saved.id, {
       analyzedAt: startedAt,
@@ -134,10 +136,15 @@ export function startScheduler() {
   globalForScheduler.propertyScheduler.unref?.();
 }
 
-export async function readSchedulerStatus() {
+export async function readSchedulerStatus(userId?: string) {
   const [searches, runs] = await Promise.all([
-    readSavedSearches(100),
+    userId ? readSavedSearches(100, userId) : readSavedSearches(100),
     readRecentSchedulerRuns(100),
   ]);
-  return { searches, runs, searchIntervalMinutes: 60 };
+  const savedIds = new Set(searches.map((item) => item.id));
+  return {
+    searches,
+    runs: userId ? runs.filter((run) => savedIds.has(run.savedSearchId)) : runs,
+    searchIntervalMinutes: 60,
+  };
 }

@@ -66,6 +66,16 @@ A implementação atual usa um registro por hostname:
 
 A Serper descobre páginas de busca, mas não é considerada fonte dos dados do imóvel. Os filtros de finalidade, preço, quartos, vagas e tipo são incluídos na consulta de descoberta, traduzidos para a URL do portal quando há regra conhecida e reaplicados sobre o modelo normalizado.
 
+#### Qualidade da localização
+
+Cada imóvel recebe `location_status`:
+
+- `confirmed`: Rio de Janeiro/RJ identificado no conteúdo;
+- `unknown`: não foi possível determinar a cidade; o imóvel permanece no sistema e aparece com alerta;
+- `excluded`: outra cidade/UF identificada; o imóvel é persistido para auditoria, mas não é elegível, não aparece nos resultados e não volta a ser liberado em pesquisas futuras.
+
+Essa classificação é determinística e ocorre antes da IA. A IA pode completar o endereço somente com evidência literal da página e não pode alterar a classificação geográfica. O Control Painel apresenta separadamente `Excluído por localização` e `Cidade não determinada`.
+
 O modo visível é o padrão local porque o Viva Real retornou `403` no teste headless e `200` com Chrome visível. Esse comportamento não garante acesso futuro. CAPTCHA, Cloudflare e autenticação são reportados sem tentativa de contorno.
 
 ### 2. Armazenamento bruto
@@ -183,6 +193,8 @@ O PostgreSQL é a fonte de verdade para descobertas, coletas, imóveis e anális
 - `search_results`: snapshot de cada aparição e decisão de elegibilidade;
 - `property_analyses`: análise estruturada da IA e validade.
 - `property_analysis_reviews`: respostas humanas para campos que a IA classificou como ambíguos.
+- `property_decision_events`: auditoria estruturada de favoritos, descartes, feedbacks,
+  análises, correções e alterações SQL.
 
 A identidade não inclui preço, permitindo reconhecer o mesmo imóvel após uma alteração de valor. Identificadores externos confiáveis têm prioridade; URLs canônicas são o fallback conservador.
 
@@ -213,6 +225,18 @@ As migrações são versionadas em `db/migrations`. O importador transfere o his
 - **Agendador** para coletas periódicas e revalidação.
 
 O núcleo de domínio deve usar interfaces para conectores, mapas, modelos de IA e canais de alerta, permitindo troca de fornecedores.
+
+### 10. Auditoria e aprendizado controlado
+
+Cada decisão sobre um imóvel gera um evento em `property_decision_events`, com origem
+(`interface`, `ide`, `migration` ou `system`), usuário, estado anterior/posterior,
+motivo, evidências e status de aprendizado. Alterações diretas em `tb_properties` são
+registradas por trigger PostgreSQL; a aplicação registra as ações de interface.
+
+Os eventos não são enviados integralmente à IA. O serviço de perfil consolida sinais
+positivos, negativos e correções factuais, limita a quantidade de exemplos e calcula
+confiança. Regras obrigatórias do domínio continuam em `AGENTS.md` e nunca podem ser
+removidas por feedback implícito. A API administrativa permite auditar os eventos.
 
 ## Configuração e segredos
 

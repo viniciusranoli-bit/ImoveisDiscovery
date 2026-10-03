@@ -1,12 +1,12 @@
 # Sobe a aplicação e um PostgreSQL próprio.
-# As senhas e chaves ficam em backend/.env, que não entra na imagem.
 #
-#   npm run docker:up
+#   npm run docker:up      (recomendado — sincroniza backend/.env → .env na raiz)
 #   npm run docker:down
 #
-# O banco criado aqui é novo. DB_HOST do arquivo é trocado pelo serviço db.
-# Para apontar a um Postgres que já existe na máquina, troque DB_HOST para
-# host.docker.internal e remova o serviço db.
+# Compose só lê .env na raiz para POSTGRES_*; o app usa backend/.env (AUTH_SECRET, APIs).
+# Sem npm: npx tsx scripts/sync-docker-env.ts && docker compose up --build
+#
+# O serviço app sobrescreve DB_HOST=db. Para Postgres externo: DB_HOST=host.docker.internal e remova db.
 
 name: aluguel-discovery
 
@@ -14,9 +14,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DATABASE_NAME:?Defina DATABASE_NAME em backend/.env}
-      POSTGRES_USER: ${DB_USER:?Defina DB_USER em backend/.env}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD em backend/.env}
+      POSTGRES_DB: ${DATABASE_NAME:-alugueldiscovery}
+      POSTGRES_USER: ${DB_USER:-aluguel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-aluguel_dev_docker}
     volumes:
       - aluguel_pg:/var/lib/postgresql/data
     healthcheck:

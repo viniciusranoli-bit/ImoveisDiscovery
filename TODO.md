@@ -9,11 +9,11 @@
 
 5) [x] Criar um plano no Canvas de como fazer o envio via whatsapp dentro do apartamento esperado, onde apartamento esperado para compra atende as necessidade de direito a laje e/ou churrasqueira ou cobertura abaixo de 2 milhoes.
 
-6) [ ] Adicionar login usando o autenticador do Google, e uma tela de login com uma opcao de criar um novo usuario. Para isso, o login e a senha.
+6) [x] Adicionar login usando o autenticador do Google, e uma tela de login com uma opcao de criar um novo usuario. Para isso, o login e a senha.
 
 7) [x] Mudar a estrutura de tabela para uma padronizacao onde tabelas comecam com TB_, procedures com PR_ e assim por diante. Garantir que todas os objetos tem nos comentararios o motivo da existencia.
 
-8) [ ] Criar um plano para termos multiagentes, o agente nesse caso seria um agente de testes para executar depois de cada deploy da solucao
+8) [x] Criar um plano para termos multiagentes, o agente nesse caso seria um agente de testes para executar depois de cada deploy da solucao
 
 9) [x] Dividir o historico no menu laterial em compra e aluguel
 
@@ -37,11 +37,13 @@
 
 19) [x] Melhorar UX com um tom mais executivo, azul claro e branco
 
-20) Colocar limite por usuarios logados, criar menu lateral com a opcao de administracao. Nessa funcao listar os usuarios que por padrao podem fazer 10 pesquisas, ate o administrador aumentar a quantidade de pesquisas
+20) [x] Colocar limite por usuarios logados, criar menu lateral com a opcao de administracao. Nessa funcao listar os usuarios que por padrao podem fazer 10 pesquisas, ate o administrador aumentar a quantidade de pesquisas
 
-21) Criar uma lista de favoritos, para isso, coloque uma estrela nos cards de apartamentos, tanto de alguel como no de compra. Adicione essa funcionalidade no menu.
+21) [x] Criar uma lista de favoritos, para isso, coloque uma estrela nos cards de apartamentos, tanto de alguel como no de compra. Adicione essa funcionalidade no menu.
 
-22) Adicione o endereco dos apartamentos nos cards.
+22) [x] No Historico de compras, separar em tres blocos (com interesse, sem laje/churrasqueira, cobertura sem interesse) com filtro na lista com interesse.
 
-23) No Historico de compras, coloque os filtros das opcoes de regular, com churrasqueira, com laje, com churrasqueira e laje, e Esperando analise
+23) [x] Adicionar dois botões nos cards de compra de cobertura, salvar ou descartar. Descartadas vão ao histórico cobertura sem interesse.
+ 
+24) [x] Criar umuma nova funcionalidae, um mapa com o endereco de todas os imoveis com endereco. No caso de mais de um na mesma rua, apresentar a quantidade. Esse mapa precisa ser navegavel e possivel escolher os apartamentos nele, abrir o card do imovel. Para apartamentos sem endereco, descartar no mapa.
 

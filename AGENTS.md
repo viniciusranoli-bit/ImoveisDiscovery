@@ -50,6 +50,17 @@ Ordem de prioridade:
 
 Quando possível, usar rota a pé, e não distância em linha reta. Informar a estimativa, a fonte e eventuais limitações da medição.
 
+
+## Ações e caracteristicas:
+
+Os dois tipos de imoveis tem diferentes maneiras de classificar e buscar informações
+
+- Cobertura - quando for cobertura, deverá ter o botáo de favorito (quando marcado deverá aparecer no favorito) e um botão para descartar (quando escolhido, deverá entrar no historico do tipo do imovel e náo aparecer no resultado de novo, mesmo que aparece na nova pesquisa). A IA náo poderá rodar nessa caso.
+
+- Apartamento - quando for apartamento, deverá ter o botáo de favorito (quando marcado deverá aparecer no favorito), um botão para descartar (quando escolhido, deverá entrar no historico do tipo do imovel e náo aparecer no resultado de novo, mesmo que aparece na nova pesquisa), e o botáo de IA para levantar as informações extras.
+
+
+
 ## Fontes a monitorar
 
 Priorizar anúncios recentes em plataformas imobiliárias confiáveis, como QuintoAndar, Viva Real, ZAP Imóveis, OLX Imóveis, Imovelweb, Loft e imobiliárias locais. Incluir links diretos.

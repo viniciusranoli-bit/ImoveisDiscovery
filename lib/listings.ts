@@ -1,6 +1,7 @@
 export type Priority = "Alta" | "Média" | "Baixa";
 export type ListingPurpose = "rent" | "sale";
 export type PropertyType = "apartment" | "penthouse";
+export type LocationStatus = "confirmed" | "unknown" | "excluded";
 
 export type SearchFilters = {
   purpose: ListingPurpose;
@@ -22,12 +23,15 @@ export type CollectedListing = {
   areaM2?: number;
   location?: string;
   neighborhood: string;
+  locationStatus?: LocationStatus;
   link: string;
   source: string;
   sources: string[];
   sourceSearchUrl: string;
   collectedAt: string;
   evidence: string[];
+  /** Coleta em que o imóvel foi visto por último (visão acumulada por agendamento). */
+  lastSearchRunId?: string;
 };
 
 export type SourceCollectionStatus = {
@@ -49,6 +53,10 @@ export type MultiPortalRun = {
   sources: SourceCollectionStatus[];
   totalCollected?: number;
   suppressedCount?: number;
+  savedSearchId?: string | null;
+  savedSearchTitle?: string;
+  /** Quantas execuções concluídas compõem a lista acumulada. */
+  accumulatedRunCount?: number;
 };
 
 export type Listing = {
@@ -296,6 +304,7 @@ export function deduplicateCollectedListings(listings: CollectedListing[]) {
     }
     unique.set(key, {
       ...current,
+      ...(current.location ? {} : listing.location ? { location: listing.location } : {}),
       sources: [...new Set([...current.sources, ...listing.sources])],
       evidence: [...new Set([...current.evidence, ...listing.evidence])],
     });

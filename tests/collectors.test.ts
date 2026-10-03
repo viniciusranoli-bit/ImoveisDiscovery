@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { acceptQuotedAddress, extractPublishedAddress } from "../lib/collectors/address";
 import { adapterFor } from "../lib/collectors/adapters";
-import { parseListingCandidate } from "../lib/collectors/parser";
+import { classifyLocationText, parseListingCandidate } from "../lib/collectors/parser";
 import {
   deduplicateCollectedListings,
   matchesSearchFilters,
@@ -47,6 +48,23 @@ test("adapta finalidade na URL dos portais conhecidos", () => {
     quinto.buildSearchUrl("https://www.quintoandar.com.br/alugar/imovel/botafogo", saleFilters),
     /\/comprar\//,
   );
+});
+
+test("extrai o logradouro publicado e rejeita endereço inventado pela IA", () => {
+  const card =
+    "Botafogo, Rio de JaneiroRua São ClementeTamanho do imóvel 70 m²Quantidade de quartos 2";
+  assert.equal(extractPublishedAddress(card), "Rua São Clemente");
+  assert.equal(
+    acceptQuotedAddress(card, "Rua São Clemente", "Rio de JaneiroRua São ClementeTamanho"),
+    "Rua São Clemente",
+  );
+  assert.equal(acceptQuotedAddress(card, "Rua Inventada", "Rua Inventada"), undefined);
+});
+
+test("classifica localização confirmada, desconhecida e incompatível", () => {
+  assert.equal(classifyLocationText("Rua São Clemente, Botafogo, Rio de Janeiro/RJ", "Botafogo"), "confirmed");
+  assert.equal(classifyLocationText("Rua São Clemente, Botafogo", "Botafogo"), "unknown");
+  assert.equal(classifyLocationText("Rua Doutor Armando Barbedo, Tristeza, Porto Alegre/RS", "Leme"), "excluded");
 });
 
 test("estrutura cartão do Viva Real e aplica os filtros locais", () => {

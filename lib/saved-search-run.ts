@@ -27,7 +27,7 @@ export async function runSavedSearchCollection(saved: SavedSearch): Promise<Mult
     results: discovered.results,
     rawResponse: discovered.rawResponse,
   };
-  await saveSerperCollection(collection);
+  await saveSerperCollection(collection, saved.userId ?? undefined);
   const urls = collection.results
     .map((result) => result.url ?? result.link)
     .filter((url): url is string => Boolean(url));

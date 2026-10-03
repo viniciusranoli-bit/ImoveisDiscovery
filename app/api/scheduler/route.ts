@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth/request-user";
 import { deleteSchedulerRun, updateSavedSearchSchedule } from "@/lib/db/repository";
 import { isAnalysisBatchCount, isAnalysisInterval } from "@/lib/schedule";
 import { readSchedulerStatus, startScheduler } from "@/lib/scheduler";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   startScheduler();
   try {
-    return NextResponse.json(await readSchedulerStatus(), {
+    const user = await requireUser();
+    return NextResponse.json(await readSchedulerStatus(user.id), {
       headers: { "cache-control": "no-store" },
     });
   } catch (error) {

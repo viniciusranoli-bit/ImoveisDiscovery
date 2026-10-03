@@ -7,8 +7,10 @@ import {
   type SearchFilters,
 } from "@/lib/listings";
 import { normalizeNeighborhoods } from "@/lib/neighborhoods";
+import { requireUser } from "@/lib/auth/request-user";
+import { assignSearchRunUser } from "@/lib/db/repository";
 import {
-  readLatestMultiPortalRun,
+  readMultiPortalRunView,
   readSerperCollection,
   saveMultiPortalRun,
 } from "@/lib/storage";
@@ -17,11 +19,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return NextResponse.json(await readLatestMultiPortalRun(), {
-      headers: { "cache-control": "no-store" },
-    });
+    const user = await requireUser();
+    const url = new URL(request.url);
+    const savedSearchId = url.searchParams.get("savedSearchId") ?? undefined;
+    const scopeParam = url.searchParams.get("scope");
+    const scope =
+      scopeParam === "manual" || scopeParam === "latest"
+        ? scopeParam
+        : undefined;
+    return NextResponse.json(
+      await readMultiPortalRunView({ savedSearchId, scope, userId: user.id }),
+      {
+        headers: { "cache-control": "no-store" },
+      },
+    );
   } catch (error) {
     const code =
       error && typeof error === "object" && "code" in error ? String(error.code) : "";
@@ -39,6 +52,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUser();
     const body = (await request.json()) as {
       collectionId?: string;
       filters?: Partial<SearchFilters>;
@@ -46,6 +60,7 @@ export async function POST(request: Request) {
     if (!body.collectionId) {
       return NextResponse.json({ error: "Informe a coleta." }, { status: 400 });
     }
+    await assignSearchRunUser(body.collectionId, user.id);
     const collection = await readSerperCollection(body.collectionId);
     const filters = normalizeSearchFilters(
       body.filters ?? collection.filters ?? defaultSearchFilters,

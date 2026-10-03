@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth/request-user";
 import {
   deleteSavedSearch,
   readSavedSearches,
@@ -13,8 +14,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const user = await requireUser();
     return NextResponse.json(
-      { items: await readSavedSearches() },
+      { items: await readSavedSearches(50, user.id) },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
@@ -27,6 +29,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUser();
     const body = (await request.json()) as {
       city?: unknown;
       neighborhood?: unknown;
@@ -44,6 +47,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Informe cidade, ao menos um bairro e filtros válidos." }, { status: 400 });
     }
     const item = await saveSavedSearch({
+      userId: user.id,
       city: body.city.trim(),
       neighborhoods,
       filters: normalizeSearchFilters(body.filters),
@@ -86,6 +90,7 @@ function savedSearchPayload(body: {
 
 export async function PATCH(request: Request) {
   try {
+    await requireUser();
     const payload = savedSearchPayload(await request.json());
     if (!payload) {
       return NextResponse.json({ error: "Informe o agendamento, a cidade, ao menos um bairro e filtros válidos." }, { status: 400 });
@@ -105,6 +110,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    await requireUser();
     const id = new URL(request.url).searchParams.get("id")?.trim();
     if (!id) return NextResponse.json({ error: "Informe o agendamento." }, { status: 400 });
     await deleteSavedSearch(id);

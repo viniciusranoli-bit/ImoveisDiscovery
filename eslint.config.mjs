@@ -1,7 +1,16 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
+import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  ...nextVitals,
-  globalIgnores([".next/**", "node_modules/**"]),
+  globalIgnores([".next/**", "node_modules/**", "json/**"]),
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
