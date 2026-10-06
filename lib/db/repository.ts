@@ -10,6 +10,13 @@ import {
 } from "../listings";
 import type { ListingPurpose, LocationStatus } from "../listings";
 import { neighborhoodLabel, normalizeNeighborhoods } from "../neighborhoods";
+import {
+  aiDismissSummary,
+  readAiDismissReason,
+  shouldAutoDismissByPrice,
+  type AiDismissReason,
+} from "../ai-auto-dismiss";
+import { propertyTypesFilterLabel } from "../listing-labels";
 import type { AnalysisBatchCount, AnalysisIntervalMinutes } from "../schedule";
 import type {
   PropertyFeatureAnalysis,
@@ -73,6 +80,7 @@ export type SuppressedHistoryItem = {
   propertyType?: "apartment" | "penthouse";
   penthouseDisposition?: "saved" | "dismissed" | null;
   dismissed?: boolean;
+  dismissedByAi?: boolean;
 };
 
 export type AnalysisReviewAnswer = "yes" | "no" | "unknown";
@@ -196,7 +204,8 @@ export async function saveSavedSearch(input: {
     .update(json({ city: input.city, neighborhoods, filters: input.filters }))
     .digest("hex");
   const purpose = input.filters.purpose === "sale" ? "Compra" : "Aluguel";
-  const title = `${purpose} · ${label} · ${input.filters.bedroomsMin}+ quartos`;
+  const propertyTypes = propertyTypesFilterLabel(input.filters.propertyTypes);
+  const title = `${purpose} · ${propertyTypes} · ${label} · ${input.filters.bedroomsMin}+ quartos`;
   const result = await query<SavedSearchRow>(
     `
       INSERT INTO tb_saved_searches (
@@ -259,7 +268,7 @@ function savedSearchIdentity(input: {
     neighborhoods,
     label,
     searchKey,
-    title: `${purpose} · ${label} · ${input.filters.bedroomsMin}+ quartos`,
+    title: `${purpose} · ${propertyTypesFilterLabel(input.filters.propertyTypes)} · ${label} · ${input.filters.bedroomsMin}+ quartos`,
   };
 }
 
@@ -556,7 +565,16 @@ async function upsertProperty(
           research.last_researched_at IS NULL
           OR research.last_researched_at <= $3::timestamptz - INTERVAL '6 months'
         ) AND property.location_status <> 'excluded' AS eligible,
-        research.last_researched_at + INTERVAL '6 months' AS suppressed_until
+        CASE
+          WHEN (
+            research.last_researched_at IS NULL
+            OR research.last_researched_at <= $3::timestamptz - INTERVAL '6 months'
+          ) AND property.location_status <> 'excluded' THEN NULL
+          ELSE COALESCE(
+            research.last_researched_at + INTERVAL '6 months',
+            $3::timestamptz
+          )
+        END AS suppressed_until
       FROM tb_properties property
       LEFT JOIN tb_property_purpose_research research
         ON research.property_id = property.id
@@ -734,12 +752,14 @@ export async function persistMultiPortalRun(run: MultiPortalRun): Promise<MultiP
       `,
       [run.id, run.collectedAt, run.listings.length, eligibleListings.length, suppressedCount],
     );
-    return {
+    const result = {
       ...run,
       listings: eligibleListings,
       totalCollected: run.listings.length,
       suppressedCount,
     };
+    result.listings = await autoDismissOverpricedRentals(result.listings, ownerUserId);
+    return result;
   });
 }
 
@@ -842,6 +862,7 @@ export async function readAccumulatedPortalRun(input: {
   if (userId) {
     const dismissed = await readDismissedLinks(userId);
     mergedListings = excludeDismissedListings(mergedListings, dismissed);
+    mergedListings = await autoDismissOverpricedRentals(mergedListings, userId);
   }
   const sources = await readPortalRunSources(latest.id);
   const totalDiscovered = runs.rows.reduce((sum, run) => sum + run.discovered_count, 0);
@@ -929,6 +950,7 @@ export async function readLatestPortalRun(userId?: string): Promise<MultiPortalR
   if (userId) {
     const dismissed = await readDismissedLinks(userId);
     runListings = excludeDismissedListings(runListings, dismissed);
+    runListings = await autoDismissOverpricedRentals(runListings, userId);
   }
   return {
     id: row.id,
@@ -1272,10 +1294,39 @@ export async function resolvePropertyIdByLink(link: string) {
   return result.rows[0]?.property_id;
 }
 
+
+async function autoDismissOverpricedRentals(
+  listings: CollectedListing[],
+  userId: string | null | undefined,
+) {
+  if (!userId) return listings;
+  const kept: CollectedListing[] = [];
+  for (const listing of listings) {
+    if (!shouldAutoDismissByPrice(listing)) {
+      kept.push(listing);
+      continue;
+    }
+    try {
+      await dismissListingForUser({
+        userId,
+        link: listing.link,
+        listing,
+        dismissedByAi: true,
+        dismissReason: "price",
+      });
+    } catch {
+      // Imóvel pode ainda não estar persistido; mantém fora do retorno.
+    }
+  }
+  return kept;
+}
+
 export async function dismissListingForUser(input: {
   userId: string;
   link: string;
   listing: CollectedListing;
+  dismissedByAi?: boolean;
+  dismissReason?: AiDismissReason;
 }) {
   const canonical = canonicalListingLink(input.link);
   const propertyId =
@@ -1293,11 +1344,12 @@ export async function dismissListingForUser(input: {
   await query(
     `
       INSERT INTO tb_dismissed_listings (
-        user_id, property_id, canonical_url, purpose, property_type, listing_snapshot
+        user_id, property_id, canonical_url, purpose, property_type, listing_snapshot, dismissed_by_ai
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
       ON CONFLICT (user_id, property_id, canonical_url) DO UPDATE
       SET listing_snapshot = EXCLUDED.listing_snapshot,
+          dismissed_by_ai = EXCLUDED.dismissed_by_ai,
           dismissed_at = now()
     `,
     [
@@ -1306,7 +1358,12 @@ export async function dismissListingForUser(input: {
       canonical,
       input.listing.purpose,
       propertyType,
-      json(input.listing),
+      json(
+        input.dismissReason
+          ? { ...input.listing, aiDismissReason: input.dismissReason }
+          : input.listing,
+      ),
+      input.dismissedByAi ?? false,
     ],
   );
   if (propertyType === "penthouse") {
@@ -1331,9 +1388,10 @@ export async function readDismissedListingHistory(
     listing_snapshot: CollectedListing;
     dismissed_at: Date;
     property_type: string;
+    dismissed_by_ai: boolean;
   }>(
     `
-      SELECT property_id, canonical_url, listing_snapshot, dismissed_at, property_type
+      SELECT property_id, canonical_url, listing_snapshot, dismissed_at, property_type, dismissed_by_ai
       FROM tb_dismissed_listings
       WHERE user_id = $1 AND purpose = $2
       ORDER BY dismissed_at DESC
@@ -1357,7 +1415,9 @@ export async function readDismissedListingHistory(
       analysisId: `dismissed:${row.property_id}`,
       slabRights: "not_mentioned" as const,
       balconyBarbecue: "not_mentioned" as const,
-      summary: "Descartado manualmente. Não reaparece nos resultados.",
+      summary: row.dismissed_by_ai
+        ? aiDismissSummary(readAiDismissReason(listing) ?? "features")
+        : "Descartado manualmente. Não reaparece nos resultados.",
       category: "none" as const,
       purpose,
       rentAmount: listing.purpose === "rent" ? listing.price : undefined,
@@ -1369,6 +1429,7 @@ export async function readDismissedListingHistory(
             : undefined,
       penthouseDisposition: row.property_type === "penthouse" ? "dismissed" : null,
       dismissed: true,
+      dismissedByAi: row.dismissed_by_ai,
     };
   });
 }
@@ -1615,8 +1676,28 @@ export async function answerAnalysisAmbiguity(input: {
   feature: "slab_rights" | "balcony_barbecue";
   answer: AnalysisReviewAnswer;
 }) {
-  const analysis = await query<{ result: PropertyFeatureAnalysis; property_id: string; listing_id: string }>(
-    "SELECT result, property_id, listing_id FROM tb_property_analyses WHERE id = $1",
+  const analysis = await query<{
+    result: PropertyFeatureAnalysis;
+    property_id: string;
+    listing_id: string;
+  }>(
+    `
+      SELECT
+        pa.result,
+        pa.property_id,
+        COALESCE(
+          (
+            SELECT sr.listing_snapshot->>'id'
+            FROM tb_search_results sr
+            WHERE sr.property_id = pa.property_id
+            ORDER BY sr.seen_at DESC
+            LIMIT 1
+          ),
+          ''
+        ) AS listing_id
+      FROM tb_property_analyses pa
+      WHERE pa.id = $1
+    `,
     [input.analysisId],
   );
   const result = analysis.rows[0]?.result;

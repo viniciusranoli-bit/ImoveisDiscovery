@@ -132,6 +132,7 @@ dl { border-block:1px solid var(--line); display:grid; grid-template-columns:rep
 .history-classifiers span { width:100%; color:var(--muted); font-size:.8rem; font-weight:700; }
 .history-classifiers button { min-height:36px; padding:7px 10px; font-size:.75rem; }
 .history-classifiers button.active { background:var(--brand); color:#fff; }
+.ai-dismissed-label { color:#7c2d12!important; font-weight:700; }
 .control-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
 .control-metrics article,.control-breakdowns section,.control-activity section { border:1px solid var(--line); border-radius:14px; background:#f8fbfe; padding:16px; }
 .control-metrics span { display:block; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }

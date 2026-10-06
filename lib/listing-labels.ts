@@ -18,6 +18,17 @@ export function propertyTypeLabel(propertyType?: PropertyType | "unknown") {
   return isPenthouseType(propertyType) ? "Cobertura" : "Apartamento";
 }
 
+/** Rótulo curto dos tipos escolhidos na pesquisa (Apartamento, Cobertura ou ambos). */
+export function propertyTypesFilterLabel(propertyTypes?: PropertyType[]) {
+  const types = [...new Set(propertyTypes ?? [])];
+  const hasApartment = types.includes("apartment");
+  const hasPenthouse = types.includes("penthouse");
+  if (hasApartment && hasPenthouse) return "Apartamento e cobertura";
+  if (hasPenthouse) return "Cobertura";
+  if (hasApartment) return "Apartamento";
+  return "Tipo não definido";
+}
+
 /** IA de laje/churrasqueira: só apartamento em compra. */
 export function supportsSlabFeatureAnalysis(listing: Pick<CollectedListing, "purpose" | "propertyType">) {
   return listing.purpose === "sale" && !isPenthouseType(listing.propertyType);

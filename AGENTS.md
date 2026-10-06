@@ -57,7 +57,7 @@ Os dois tipos de imoveis tem diferentes maneiras de classificar e buscar informa
 
 - Cobertura - quando for cobertura, deverá ter o botáo de favorito (quando marcado deverá aparecer no favorito) e um botão para descartar (quando escolhido, deverá entrar no historico do tipo do imovel e náo aparecer no resultado de novo, mesmo que aparece na nova pesquisa). A IA náo poderá rodar nessa caso.
 
-- Apartamento - quando for apartamento, deverá ter o botáo de favorito (quando marcado deverá aparecer no favorito), um botão para descartar (quando escolhido, deverá entrar no historico do tipo do imovel e náo aparecer no resultado de novo, mesmo que aparece na nova pesquisa), e o botáo de IA para levantar as informações extras.
+- Apartamento - quando for apartamento, deverá ter o botáo de favorito (quando marcado deverá aparecer no favorito), um botão para descartar (quando escolhido, deverá entrar no historico do tipo do imovel e náo aparecer no resultado de novo, mesmo que aparece na nova pesquisa), e o botáo de IA para levantar as informações extras. Apartamentos para comprar sem 
 
 
 

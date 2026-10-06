@@ -4,15 +4,40 @@ import {
   getPropertyAnalysisContext,
   readValidPropertyAnalysis,
   saveDbPropertyAnalysis,
+  dismissListingForUser,
 } from "@/lib/db/repository";
 import {
   parsePropertyFeatureAnalysis,
   type SavedPropertyAnalysis,
 } from "@/lib/property-analysis";
+import type { CollectedListing } from "@/lib/listings";
 import { recordDecisionEvent } from "@/lib/decision-events";
 import { preferencePrompt, readPreferenceProfile } from "@/lib/preference-profile";
 
 export type PropertyAnalysisResponse = SavedPropertyAnalysis & { cached: boolean };
+
+async function discardApartmentWithoutRequestedFeatures(
+  listing: CollectedListing,
+  analysis: Pick<SavedPropertyAnalysis, "slabRights" | "balconyBarbecue">,
+  userId?: string | null,
+) {
+  if (
+    !userId ||
+    listing.purpose !== "sale" ||
+    listing.propertyType !== "apartment" ||
+    analysis.slabRights !== "not_mentioned" ||
+    analysis.balconyBarbecue !== "not_mentioned"
+  ) {
+    return;
+  }
+  await dismissListingForUser({
+    userId,
+    link: listing.link,
+    listing,
+    dismissedByAi: true,
+    dismissReason: "features",
+  });
+}
 
 export async function analyzePropertyFromRun(
   runId: string,
@@ -30,6 +55,7 @@ export async function analyzePropertyFromRun(
 
   const cached = await readValidPropertyAnalysis(context.property_id, "sale");
   if (cached) {
+    await discardApartmentWithoutRequestedFeatures(context.listing_snapshot, cached.result, userId);
     return {
       ...cached.result,
       listingId,
@@ -122,6 +148,7 @@ ${page.description.slice(0, 20_000)}`;
     descriptionSource: listing.link,
   };
   await saveDbPropertyAnalysis(context.property_id, analysis, "sale", userId);
+  await discardApartmentWithoutRequestedFeatures(listing, analysis, userId);
   await recordDecisionEvent({
     propertyId: context.property_id,
     listingId,

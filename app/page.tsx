@@ -22,6 +22,7 @@ import { rentHistoryBands, rentHistoryFilters, type RentHistoryFilter } from "@/
 import {
   listingActionsHint,
   propertyTypeLabel,
+  propertyTypesFilterLabel,
   purposeLabel,
   supportsSlabFeatureAnalysis,
 } from "@/lib/listing-labels";
@@ -76,6 +77,7 @@ type SuppressedHistoryItem = {
   propertyType?: "apartment" | "penthouse";
   penthouseDisposition?: "saved" | "dismissed" | null;
   dismissed?: boolean;
+  dismissedByAi?: boolean;
 };
 type AuthUser = {
   id: string;
@@ -199,6 +201,7 @@ export default function Home() {
   const [favoriteLinks, setFavoriteLinks] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<CollectedListing[]>([]);
   const [dismissedItems, setDismissedItems] = useState<SuppressedHistoryItem[]>([]);
+  const [dismissedPropertyType, setDismissedPropertyType] = useState<HistoryPropertyType>("all");
   const [saleHistoryFilter, setSaleHistoryFilter] = useState<SaleHistoryFilter>("all");
   const [rentHistoryFilter, setRentHistoryFilter] = useState<RentHistoryFilter>("all");
   const [historyPropertyType, setHistoryPropertyType] = useState<HistoryPropertyType>("all");
@@ -242,6 +245,13 @@ export default function Home() {
       ? items
       : items.filter((item) => item.propertyType === historyPropertyType);
   }, [historyPropertyType, rentHistory, saleHistory, section]);
+  const filteredDismissedItems = useMemo(
+    () =>
+      dismissedPropertyType === "all"
+        ? dismissedItems
+        : dismissedItems.filter((item) => item.propertyType === dismissedPropertyType),
+    [dismissedItems, dismissedPropertyType],
+  );
   const groupedHistory = useMemo(
     () =>
       section === "history-rent"
@@ -623,14 +633,6 @@ export default function Home() {
     setFilters((previous) => ({ ...previous, [key]: value }));
   }
 
-  function togglePropertyType(type: PropertyType) {
-    setFilters((previous) => ({
-      ...previous,
-      propertyTypes: previous.propertyTypes.includes(type)
-        ? previous.propertyTypes.filter((item) => item !== type)
-        : [...previous.propertyTypes, type],
-    }));
-  }
 
   async function collectSearch(event: FormEvent) {
     event.preventDefault();
@@ -828,7 +830,7 @@ export default function Home() {
             }
           : previous,
       );
-      if (refresh) await refreshHistory();
+      if (refresh) await Promise.all([refreshHistory(), refreshDismissed()]);
       return true;
     } catch (requestError) {
       setPropertyAnalysisErrors((previous) => ({
@@ -1031,25 +1033,33 @@ export default function Home() {
               onChange={(event) => updateFilter("parkingMin", Number(event.target.value))}
             />
           </label>
-          <fieldset className="property-types">
-            <legend>Tipo de imóvel (selecione um ou ambos)</legend>
-            <label>
-              <input
-                type="checkbox"
-                checked={filters.propertyTypes.includes("apartment")}
-                onChange={() => togglePropertyType("apartment")}
-              />
-              Apartamento
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={filters.propertyTypes.includes("penthouse")}
-                onChange={() => togglePropertyType("penthouse")}
-              />
-              Cobertura
-            </label>
-          </fieldset>
+          <label>
+            Tipo de imóvel
+            <select
+              value={
+                filters.propertyTypes.includes("apartment") && filters.propertyTypes.includes("penthouse")
+                  ? "both"
+                  : filters.propertyTypes.includes("penthouse")
+                    ? "penthouse"
+                    : "apartment"
+              }
+              onChange={(event) => {
+                const value = event.target.value;
+                updateFilter(
+                  "propertyTypes",
+                  value === "both"
+                    ? ["apartment", "penthouse"]
+                    : value === "penthouse"
+                      ? ["penthouse"]
+                      : ["apartment"],
+                );
+              }}
+            >
+              <option value="apartment">Apartamento</option>
+              <option value="penthouse">Cobertura</option>
+              <option value="both">Apartamento e cobertura</option>
+            </select>
+          </label>
           <button
             className="collect-button"
             disabled={
@@ -1077,7 +1087,11 @@ export default function Home() {
             >
               <option value="">Carregar filtros salvos</option>
               {savedSearches.map((saved) => (
-                <option key={saved.id} value={saved.id}>{saved.title}</option>
+                <option key={saved.id} value={saved.id}>
+                  {saved.title.includes("Apartamento") || saved.title.includes("Cobertura")
+                    ? saved.title
+                    : `${saved.title} · ${propertyTypesFilterLabel(saved.filters.propertyTypes)}`}
+                </option>
               ))}
             </select>
           </label>
@@ -1297,7 +1311,7 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
-                      <h3>{listing.title}</h3>
+                    <h3>{listing.title}</h3>
                       <p className="listing-model-badges">
                         <span className="badge-purpose">{purposeLabel(listing.purpose)}</span>
                         <span className="badge-type">{propertyTypeLabel(listing.propertyType)}</span>
@@ -1360,7 +1374,7 @@ export default function Home() {
                                     : "Não mencionada"}
                               </dd>
                             </div>
-                          </dl>
+                    </dl>
                           <p>{analysis.summary}</p>
                           {analysis.evidence.length > 0 && (
                             <details>
@@ -1381,7 +1395,7 @@ export default function Home() {
                     </article>
                   );
                 })}
-                </div>
+                      </div>
               </>
             ) : (
               <section className="empty portal-empty">
@@ -1551,11 +1565,11 @@ export default function Home() {
                           </fieldset>
                         )}
                         <a href={item.link} target="_blank" rel="noreferrer">Abrir anúncio ↗</a>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
             ))}
           </div>
         ) : (
@@ -1565,17 +1579,17 @@ export default function Home() {
       )}
       {section === "map" && (
         <section className="map-panel semester-history" aria-labelledby="map-title">
-          <div className="section-heading">
-            <div>
+              <div className="section-heading">
+                <div>
               <p className="eyebrow">Localização</p>
               <h2 id="map-title">Mapa de imóveis</h2>
               <p className="list-description">
                 Resultados atuais, favoritos e históricos. Apartamentos em verde claro, coberturas em
                 verde escuro; sem rua no anúncio, usa o centro do bairro.
               </p>
-            </div>
+                </div>
             <span className="count">{mapProperties.length}</span>
-          </div>
+              </div>
           {mapProperties.length ? (
             <PropertyMap
               properties={mapProperties}
@@ -1616,7 +1630,7 @@ export default function Home() {
                       ★
                     </button>
                   </div>
-                  <h3>{listing.title}</h3>
+                    <h3>{listing.title}</h3>
                   <p className="listing-model-badges">
                     <span className="badge-purpose">{purposeLabel(listing.purpose)}</span>
                     <span className="badge-type">{propertyTypeLabel(listing.propertyType)}</span>
@@ -1629,7 +1643,7 @@ export default function Home() {
                   </a>
                 </article>
               ))}
-            </div>
+                      </div>
           ) : (
             <p className="history-empty">Nenhum favorito ainda. Use a estrela nos cards (qualquer tipo e modelo).</p>
           )}
@@ -1644,12 +1658,29 @@ export default function Home() {
               <p className="list-description">
                 Imóveis descartados não aparecem em resultados, favoritos, históricos ou mapa.
               </p>
-            </div>
-            <span className="count">{dismissedItems.length}</span>
+                    </div>
+            <span className="count">{filteredDismissedItems.length}</span>
           </div>
-          {dismissedItems.length ? (
+          <div className="history-classifiers" role="group" aria-label="Filtrar descartados por tipo de imóvel">
+            <span>Tipo de imóvel</span>
+            {([
+              ["all", "Todos"],
+              ["apartment", "Apartamento"],
+              ["penthouse", "Cobertura"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={dismissedPropertyType === id ? "active" : "secondary-button"}
+                onClick={() => setDismissedPropertyType(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {filteredDismissedItems.length ? (
             <div className="playwright-listings">
-              {dismissedItems.map((item) => (
+              {filteredDismissedItems.map((item) => (
                 <article key={`${item.propertyId}:${item.link}`}>
                   <span className="source-label">{item.source}</span>
                   <h3>{item.title}</h3>
@@ -1660,18 +1691,19 @@ export default function Home() {
                   <strong className="captured-price">{currency(item.rentAmount)}</strong>
                   <p className="address-line">{item.location ?? "Endereço não informado"}</p>
                   <p>{item.neighborhood}</p>
+                  {item.dismissedByAi && <p className="ai-dismissed-label">Descartado por IA</p>}
                   <p>Descartado em {new Date(item.seenAt).toLocaleDateString("pt-BR")}.</p>
                   <a href={item.link} target="_blank" rel="noreferrer">
                     Abrir anúncio ↗
                   </a>
-                </article>
-              ))}
-            </div>
+                  </article>
+                ))}
+              </div>
           ) : (
-            <p className="history-empty">Nenhum imóvel descartado.</p>
+            <p className="history-empty">Nenhum imóvel descartado para este tipo.</p>
           )}
-        </section>
-      )}
+            </section>
+          )}
       {section === "control-panel" && authUser?.role === "admin" && (
         <section className="semester-history control-panel" aria-labelledby="control-panel-title">
           <div className="section-heading">
@@ -1701,7 +1733,7 @@ export default function Home() {
                 <section>
                   <h3>Por tipo de imóvel</h3>
                   <ul>{controlPanel.byType.map((item) => <li key={item.label}><span>{item.label}</span><strong>{item.count}</strong></li>)}</ul>
-                </section>
+          </section>
                 <section>
                   <h3>Por finalidade</h3>
                   <ul>{controlPanel.byPurpose.map((item) => <li key={item.label}><span>{item.label}</span><strong>{item.count}</strong></li>)}</ul>
@@ -2064,7 +2096,7 @@ export default function Home() {
           )}
         </section>
       )}
-      </main>
+    </main>
     </div>
   );
 }
