@@ -1,0 +1,42 @@
+# Homologação: API na porta publicada 3001 (dev local usa 3006 via backend/.env).
+# PostgreSQL fica fora — configure DB_* em backend/.env.
+
+name: aluguel-backend
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    ports:
+      - "${API_PORT:-3001}:3001"
+    env_file:
+      - .env
+    environment:
+      # localhost dentro do container não alcança o Postgres no host/WSL.
+      DB_HOST: host.docker.internal
+      DB_PORT: ${DB_PORT:-5432}
+      DB_SSL: "false"
+      API_PORT: "3001"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      BACKEND_IN_DOCKER: "true"
+      PROJECT_ROOT: /workspace
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://host.docker.internal:8080}
+      PLAYWRIGHT_HEADLESS: "true"
+      PLAYWRIGHT_CHANNEL: chromium
+      PLAYWRIGHT_NO_SANDBOX: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    shm_size: 1gb
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3001/health'').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s

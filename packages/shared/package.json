@@ -1,0 +1,14 @@
+{
+  "name": "@aluguel/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./auth/*": "./src/auth/*.ts",
+    "./map/*": "./src/map/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

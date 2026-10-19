@@ -47,3 +47,51 @@
  
 24) [x] Criar umuma nova funcionalidae, um mapa com o endereco de todas os imoveis com endereco. No caso de mais de um na mesma rua, apresentar a quantidade. Esse mapa precisa ser navegavel e possivel escolher os apartamentos nele, abrir o card do imovel. Para apartamentos sem endereco, descartar no mapa.
 
+---
+
+## Login Google em produção (planejamento — fazer depois)
+
+O fluxo OAuth já existe no backend (Fastify) e na tela `/login`. Falta configurar Google Cloud, variáveis e ajustes de proxy/deploy antes de abrir na internet.
+
+### Google Cloud Console
+
+- [ ] Criar ou escolher projeto no Google Cloud.
+- [ ] Configurar tela de consentimento OAuth (Interno para Workspace, ou Externo em modo Teste com usuários de teste).
+- [ ] Criar credencial OAuth 2.0 tipo **Aplicativo da Web**.
+- [ ] Cadastrar URI de redirecionamento **exatamente** igual à pública do app:
+  - Dev: `http://localhost:3000/api/auth/google/callback`
+  - Prod: `https://<domínio>/api/auth/google/callback`
+
+### Variáveis de ambiente (`backend/.env` / servidor)
+
+- [ ] `AUTH_SECRET` — segredo forte, único por ambiente (obrigatório para sessão).
+- [ ] `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`.
+- [ ] `GOOGLE_REDIRECT_URI` — URL pública do callback (obrigatório com proxy Next → API; sem isso o backend usa `:3001` e o Google rejeita).
+- [ ] `FRONTEND_ORIGIN` — URL do site no browser (redirect após login e erros OAuth).
+- [ ] `ADMIN_EMAILS` — e-mails que viram admin no cadastro/vinculação.
+- [ ] Frontend: `API_URL` apontando para o Fastify (local ou Docker).
+
+### Código e infra (bloqueiam OAuth pelo `:3000`)
+
+- [ ] Ajustar `frontend/app/lib/api-proxy.ts` para repassar `Set-Cookie` e `Location` nas rotas `/api/auth/google` e `/api/auth/google/callback`.
+- [ ] Produção: HTTPS, `NODE_ENV=production` (cookie `Secure`), mesma redirect URI no Google.
+- [ ] Se houver reverse proxy direto no backend: `trustProxy` e headers `X-Forwarded-*` (ou manter auth só via Next).
+
+### Política de acesso (antes de domínio público)
+
+- [ ] Definir se cadastro local permanece ou só Google.
+- [ ] Não depender do “primeiro usuário vira admin”: promover admin via script e `ADMIN_EMAILS` antes do primeiro login.
+- [ ] (Opcional) Restringir login Google a lista/domínio de e-mails; checar `email_verified` no perfil Google.
+
+### Checklist de teste local
+
+- [ ] `npm run dev` (frontend + backend).
+- [ ] `/login` → Continuar com Google → volta autenticado; `GET /api/auth/session` ok.
+- [ ] Logout e novo login; mesma conta local + Google vincula `google_sub`.
+- [ ] Conferir `GET /api/auth/setup`: redirect URI exibido = cadastro no Google Cloud.
+
+### Deploy
+
+- [ ] HTTPS no domínio do frontend; variáveis de prod; proxy OAuth corrigido.
+- [ ] Se app OAuth Externo sair do modo Teste: verificação do Google (política de privacidade, escopos mínimos `openid email profile`).
+

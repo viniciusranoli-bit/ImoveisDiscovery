@@ -137,3 +137,16 @@ Antes do primeiro monitoramento, perguntar objetivamente:
 2. Quais bairros devem ser priorizados ou excluídos? Solicitar feedback em tela para aprendizado e histórico.
 3. Há requisitos adicionais, como metragem mínima, pet, andar, elevador ou portaria?
 4. Qual frequência de monitoramento e qual canal deve receber os alertas?
+
+## Status dos apartamentos
+
+As informações sáo divididas em dois blocos, informações compartilhadas por todos os usuários e informaçóes especificas por usuários.
+
+1. Informações compartilhadas por todos os usuários
+-> Todo os imoveis fazem parte da base de dados que podem ser acessados por todos usuários
+
+2. Informaçóes especificas por usuários
+-> Uma vez o usuário classificando o imovel, essa classificação é somente do proprio usuário e nenhum outro usuário pode ver
+-> Os filtros sáo especificos de cada usuário e náo podem ser compartilhados entre usuários
+-> Todas as mensagens trocadas com o Assistente é exclusivo do proprio usuário
+-> As informações de e-mail e telefone náo podem ser visto por nenhum usuário, salvo os admnistradores

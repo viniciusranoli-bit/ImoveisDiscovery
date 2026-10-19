@@ -238,6 +238,31 @@ positivos, negativos e correções factuais, limita a quantidade de exemplos e c
 confiança. Regras obrigatórias do domínio continuam em `AGENTS.md` e nunca podem ser
 removidas por feedback implícito. A API administrativa permite auditar os eventos.
 
+### 11. Assistente conversacional (v1 advisory)
+
+A seção **Assistente** no frontend permite conversa autenticada com um modelo de linguagem
+para explicar critérios de [AGENTS.md](./AGENTS.md), sugerir filtros e resumir resultados
+já carregados no painel. O assistente **não** dispara coleta Serper/Playwright, **não**
+consome cota de busca e **não** altera favoritos ou descartes automaticamente.
+
+Fluxo:
+
+- `GET /api/chat/session` reutiliza sessão recente (24h) e devolve histórico.
+- `POST /api/chat` recebe mensagem e contexto compacto (filtros, bairros, resumo de até 30 imóveis).
+- O serviço monta prompt em camadas: regras obrigatórias, perfil de preferências consolidado
+  e contexto da tela; resposta em JSON (`reply`, `filterSuggestion` opcional, `citedRules`).
+- Mensagens persistem em `tb_chat_sessions` e `tb_chat_messages`; turnos registram
+  `chat_turn` em `tb_property_decision_events` com aprendizado pendente.
+- Rate limit: 60 mensagens de usuário por hora.
+
+A coleta determinística e a validação de elegibilidade permanecem fora do chat.
+
+### 12. Alertas WhatsApp (Evolution API)
+
+Canal opcional via Evolution API self-hosted (Baileys). Regras em `tb_whatsapp_alert_rules`;
+entregas idempotentes em `tb_whatsapp_alert_deliveries`. Envio: `POST /message/sendText/{instance}`.
+Disparo após coleta/análise automática ou manual, conforme regras admin. Stack em `docker/evolution/`.
+
 ## Configuração e segredos
 
 Configurações não sensíveis podem residir em arquivo versionado. Tokens, chaves, credenciais e strings de conexão devem vir de variáveis de ambiente, arquivo `.env` local não versionado ou secret manager.

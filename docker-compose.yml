@@ -1,50 +1,26 @@
-# Sobe a aplicação e um PostgreSQL próprio.
-#
-#   npm run docker:up      (recomendado — sincroniza backend/.env → .env na raiz)
-#   npm run docker:down
-#
-# Compose só lê .env na raiz para POSTGRES_*; o app usa backend/.env (AUTH_SECRET, APIs).
-# Sem npm: npx tsx scripts/sync-docker-env.ts && docker compose up --build
-#
-# O serviço app sobrescreve DB_HOST=db. Para Postgres externo: DB_HOST=host.docker.internal e remova db.
+# Homologação: frontend 3000 + backend 3001. Dev Cursor: npm run dev (3005 + 3006).
 
 name: aluguel-discovery
 
+include:
+  - path: ./backend/docker-compose.yml
+  - path: ./frontend/docker-compose.yml
+
 services:
-  db:
-    image: postgres:16-alpine
+  backend:
     environment:
-      POSTGRES_DB: ${DATABASE_NAME:-alugueldiscovery}
-      POSTGRES_USER: ${DB_USER:-aluguel}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-aluguel_dev_docker}
-    volumes:
-      - aluguel_pg:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  app:
-    build: .
-    ports:
-      - "${APP_PORT:-3000}:3000"
-    env_file:
-      - backend/.env
+      DB_HOST: host.docker.internal
+      API_PORT: "3001"
+      FRONTEND_ORIGIN: http://localhost:3000
+      BACKEND_IN_DOCKER: "true"
+      PROJECT_ROOT: /workspace
+      EVOLUTION_API_URL: http://host.docker.internal:8080
+  frontend:
+    build:
+      args:
+        API_URL: http://backend:3001
     environment:
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_SSL: "false"
-      PLAYWRIGHT_HEADLESS: "true"
-      PLAYWRIGHT_CHANNEL: chromium
-      PLAYWRIGHT_NO_SANDBOX: "true"
+      API_URL: http://backend:3001
     depends_on:
-      db:
+      backend:
         condition: service_healthy
-    shm_size: 1gb
-    init: true
-    restart: unless-stopped
-
-volumes:
-  aluguel_pg:
